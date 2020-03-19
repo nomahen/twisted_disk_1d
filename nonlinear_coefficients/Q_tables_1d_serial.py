@@ -4,8 +4,6 @@ import argparse
 from scipy.integrate import odeint
 from scipy.optimize import least_squares
 
-
-
 p = argparse.ArgumentParser()
 p.add_argument('-a',"--alpha",dest="alpha",type=float,default=0.2, help="Alpha viscosity coefficient.")
 p.add_argument('-g',"--gamma",dest="gamma",type=float,default=5./3., help="Adiabatic index. Set between 1 and 5/3.")
@@ -208,6 +206,3 @@ for j,s in enumerate(s_arr):
 np.savetxt(fn1 + ".txt",Q1)
 np.savetxt(fn2 + ".txt",Q2)
 np.savetxt(fn3 + ".txt",Q3)
-##np.save(fn1,Q1)
-##np.save(fn2,Q2)
-##np.save(fn3,Q3)
