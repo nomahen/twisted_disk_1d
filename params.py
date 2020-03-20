@@ -13,8 +13,8 @@ rmax     = 6000.0   # Outer radius of disk [r_g]
 rho_type = "gauss"  # Type of density distribution ["gauss" or "flat"]
 
 # Numerical parameters
-tmax    = 1.      # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
-dt_init = 1.e-9   # initial timestep [t_visc]
+tmax    = 0.01    # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
+dt_init = 1.e-7   # initial timestep [t_visc]
 ngrid   = 100     # num grid points
 dolog   = True    # whether to logarithmically space grid
 bc      = "sink"  # boundary condition ["sink" or "outflow"]
@@ -29,3 +29,10 @@ smax   = 10. # Max psi value from Q table. Min is always 0.
 Q1_path = "./tables/Q1_1d_a0.2_p0.0_g1.0_np30_ng10000.txt" 
 Q2_path = "./tables/Q2_1d_a0.2_p0.0_g1.0_np30_ng10000.txt"
 Q3_path = "./tables/Q3_1d_a0.2_p0.0_g1.0_np30_ng10000.txt"
+
+#### package all params to send to evolve
+import time
+from evolve_kernel import *
+t1 = time.time()
+evolve(alpha,gamma,HoR,tilt,bhspin,r0,rw,rmin,rmax,rho_type,tmax,dt_init,ngrid,dolog,bc,io_freq,io_prefix,Q_dim,smax,Q1_path,Q2_path,Q3_path)
+print "time in seconds: ", time.time() - t1
