@@ -166,21 +166,33 @@ while (t < tmax):
     psi_y = (0.5*r[1:-1]/dr)*(l[2:,1]-l[:-2,1])
     psi_z = (0.5*r[1:-1]/dr)*(l[2:,2]-l[:-2,2])
     psi[1:-1] = np.sqrt(psi_x**2.0 + psi_y**2.0 + psi_z**2.0)
-    psi[0] = psi[1]
-    psi[-1] = psi[-2]
 
     # calculate nu1,nu2,nu3
     nu1[1:-1] = (-2.0/3.0)*(-1.0*10**(Q1_func(psi[1:-1])))*((HoR**2.0)*r[1:-1]**0.5)
-    nu1[0] = nu1[1]
-    nu1[-1] = nu1[-2]
-
     nu2[1:-1] = 2.0*10**(Q2_func(psi[1:-1]))*((HoR**2.0)*r[1:-1]**0.5)
-    nu2[0] = nu2[1]
-    nu2[-1] = nu2[-2]
-
     nu3[1:-1] = 10**(Q3_func(psi[1:-1]))*((HoR**2.0)*r[1:-1]**0.5)
-    nu3[0] = nu3[1]
-    nu3[-1] = nu3[-2]
+
+    # fill guard cells for derivative quantities
+    if   (bc=="sink"): #### Apply sink boundary conditions
+        psi[0] = 1e-10 * psi[1]
+        psi[-1] = 1e-10 * psi[-2]
+        nu1[0] = 1e-10 * nu1[1]
+        nu1[-1] = 1e-10 * nu1[-2]
+        nu2[0] = 1e-10 * nu2[1]
+        nu2[-1] = 1e-10 * nu2[-2]
+        nu3[0] = 1e-10 * nu3[1]
+        nu3[-1] = 1e-10 * nu3[-2]
+
+    elif (bc=="outflow"): #### Apply outflow boundary conditions
+        psi[0] = psi[1]
+        psi[-1] = psi[-2]
+        nu1[0] = nu1[1]
+        nu1[-1] = nu1[-2]
+        nu2[0] = nu2[1]
+        nu2[-1] = nu2[-2]
+        nu3[0] = nu3[1]
+        nu3[-1] = nu3[-2]
+
 
     #### Lets begin constructing the terms to evolve Lx, Ly, and Lz
 
