@@ -46,7 +46,7 @@ def build_table(filename):
     return QTable(data=table_list,names=table_titles)
 
 def get_fn_list(path_to_outputs,first,last):
-    fn_prefix = path_to_outputs + "evolve_"
+    fn_prefix = path_to_outputs
     fn_suffix = ".csv"
     fileno = np.linspace(first,last,last-first+1).astype(int).astype(str)
     fns = []

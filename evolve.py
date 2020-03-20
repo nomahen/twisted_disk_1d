@@ -52,6 +52,9 @@ omega = r**(-3./2.)
 # change tilt to radians
 tilt *= np.pi/180.
 
+# change prec_c to radians
+prec_c *= np.pi/180.
+
 # density distribution can be "flat" or "gaussian"
 # note: probably most intelligent to normalize rho such that total disk mass
 # is constant regardless of distribution
@@ -66,8 +69,14 @@ else:
 
 # build angular momentum quantities
 amom_mag     = density * omega * r * r # angular momentum magnitude
-amom_unit    = np.array([np.sin(tilt),0.0,np.cos(tilt)]) # single amom unit vector
-amom_uvector = np.array([amom_unit]*ngrid) # amom unit vector extended to radial grid
+
+## Adding corrections for counter rotation accretion test
+amom_unit_inner   = np.array([np.sin(tilt),0.0,np.cos(tilt)]) # amom unit vector, r < rc
+amom_unit_outer   = np.array([np.sin(tilt)*np.cos(prec_c),np.sin(tilt)*np.sin(prec_c),np.cos(tilt)]) # amom unit vector, r > rc
+amom_uvector = np.ones((ngrid,3))       # build array for anuglar momentum unit vectors
+amom_uvector[r<=rc] *= amom_unit_inner # set array at r <= rc
+amom_uvector[r>rc]  *= amom_unit_outer # set array at r >  rc
+#amom_uvector = np.array([amom_unit]*ngrid) # amom unit vector extended to radial grid
 amom_vector  = np.copy(amom_uvector) # building [Lx,Ly,Lz] for each radial grid element
 for i in range(3): amom_vector[:,i] *= amom_mag
 

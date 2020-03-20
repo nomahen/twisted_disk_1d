@@ -1,0 +1,11 @@
+Testing if simulations will see dynamical accretion, similar to Nixon+King SPH paper "tearing up the disc". 
+
+How I'm setting up the simulation: 
+
+define critical radius r_c where we want to see accretion driven by counter rotation
+
+reference simulation:
+tilt = 0, prec = 0 everywhere, some density distribution; watch alpha-disk accrete
+
+comparison simulation:
+tilt = 0 everywhere; r < r_c prec = 0, r >= r_c prec = prec_c (180 degrees)
