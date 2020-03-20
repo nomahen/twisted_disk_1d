@@ -13,7 +13,7 @@ rmax     = 6000.0   # Outer radius of disk [r_g]
 rho_type = "gauss"  # Type of density distribution ["gauss" or "flat"]
 
 # Numerical parameters
-tmax    = 0.01    # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
+tmax    = 1.      # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
 dt_init = 1.e-9   # initial timestep [t_visc]
 ngrid   = 100     # num grid points
 dolog   = True    # whether to logarithmically space grid

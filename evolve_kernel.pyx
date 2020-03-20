@@ -4,11 +4,9 @@
 
 import numpy as np
 cimport numpy as np
-import time
-from scipy.interpolate import interp1d
-import scipy.interpolate as interpolate
 cimport cython
-#cimport scipy.interpolate as interpolate
+from libc.stdio cimport printf,fopen,fclose,fprintf,FILE,sprintf
+from libc.stdlib cimport malloc
 
 ## Helper functions ##
 
@@ -35,7 +33,6 @@ cdef double interp_1d(double[:] x, double[:] y, double new_x, int nx):
             ind = i
             break
     new_y = (y[ind-1]*(x[ind]-new_x) + y[ind]*(new_x - x[ind-1]))/(x[ind]-x[ind-1]) 
-    #((y[ind]-y[ind-1])/(x[ind]-x[ind-1]))*(new_x - x[ind-1]) + y[ind-1]
     return new_y
             
 
@@ -50,6 +47,7 @@ def evolve(*p):
     cdef double alpha, gamma, HoR, tilt, bhspin, r0, rw, rmin, rmax, tmax, dt_init, io_freq, smax, 
     cdef int    ngrid,bc_type
     cdef bint   dolog
+    cdef char*  io_prefix
     alpha,gamma,HoR,tilt,bhspin,r0,rw,rmin,rmax,rho_type,tmax,dt_init,ngrid,dolog,bc,io_freq,io_prefix,Q_dim,smax,Q1_path,Q2_path,Q3_path = p  
 
     ## Build interpolation functions 
@@ -107,7 +105,7 @@ def evolve(*p):
     _omega_p[:,2] = 2.0 * bhspin / _r**3.0 # x/y components are zero, z component is LT precession frequency
 
     # calculate (approximate) viscous time (t_visc = r0**2./nu1(psi=0))
-    nu_ref    = (-2.0/3.0)*(-1.0*10**(interp_1d(_s_arr,np.log10(-Q1_parsed + small),0,ng_Q)))*((HoR**2.0)*r0**0.5)
+    nu_ref    = (-2.0/3.0)*(-1.0*10**(interp_1d(_s_arr,np.log10(-Q1_parsed + 1e-30),0,ng_Q)))*((HoR**2.0)*r0**0.5)
     t_viscous = r0*r0/nu_ref
 
     # convert tmax, dt_init from t_viscous units to code units
@@ -188,6 +186,8 @@ def evolve(*p):
     cdef double[:] Q2_arr = np.log10(Q2_parsed + small)
     cdef double[:] Q3_arr = np.log10(Q3_parsed + small)
     cdef double[:] s_arr = _s_arr
+    cdef FILE *f_out
+    cdef char[40]  io_fn
 
     # iterate!
     while (t < tmax):
@@ -267,11 +267,18 @@ def evolve(*p):
 
         #### Save before updates
         if ((t%io_freq < dt)):
-            print "t/tmax = %s, dt/tmax = %s\n" % (t/tmax,dt/tmax)
-            np.savetxt(io_prefix + str(io_cnt) + ".csv", np.array(zip(Lx,Ly,Lz,r)))
+            printf("t/tmax = %16.8f, dt/tmax = %16.8f\n",t/tmax,dt/tmax)
+            sprintf(io_fn,"%s%d.csv",io_prefix,io_cnt)
+              
+            f_out = fopen(io_fn,"w")
+            for i in range(ngrid):
+                fprintf(f_out, "%e ", Lx[i])
+                fprintf(f_out, "%e ", Ly[i])
+                fprintf(f_out, "%e ", Lz[i])
+                fprintf(f_out, "%e ", r[i])
+                fprintf(f_out, "\n")
+            fclose(f_out)
             io_cnt += 1
-
-
 
         # Apply BCs
         if   (bc_type==0): #### Apply sink boundary conditions
