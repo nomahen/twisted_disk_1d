@@ -107,7 +107,7 @@ def evolve(*p):
     _omega_p[:,2] = 2.0 * bhspin / _r**3.0 # x/y components are zero, z component is LT precession frequency
 
     # calculate (approximate) viscous time (t_visc = r0**2./nu1(psi=0))
-    nu_ref    = (-2.0/3.0)*(-1.0*10**(Q1_func(0)))*((HoR**2.0)*r0**0.5)
+    nu_ref    = (-2.0/3.0)*(-1.0*10**(interp_1d(_s_arr,np.log10(-Q1_parsed + small),0,ng_Q)))*((HoR**2.0)*r0**0.5)
     t_viscous = r0*r0/nu_ref
 
     # convert tmax, dt_init from t_viscous units to code units
