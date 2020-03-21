@@ -20,15 +20,14 @@ def build_table(filename):
     prec = np.arctan2(ly,lx)*180.0/np.pi
 
     ## Derivative quantitiess need to know how grid is spaced (linear or log)
-    if ((r[1] - r[0]) - (r[2] - r[1]) < 1e-14):
+    dr_chk_lin = np.abs((r[1] - r[0]) - (r[2] - r[1]))/r[1]
+    dr_chk_log = np.abs((np.log10(r)[1] - np.log10(r)[0]) - (np.log10(r)[2] - np.log10(r)[1]))/np.log10(r)[1]
+    if (dr_chk_lin < dr_chk_log):
         dr = r[2:] - r[:-2]
         print "Assuming linearly spaced grid..."
-    elif (((np.log10(r)[1] - np.log10(r)[0]) - (np.log10(r)[2] - np.log10(r)[1]))  < 1e-14):
+    else:
         dr = r[1:-1]*np.log(10)*(np.log10(r)[2:] - np.log10(r)[:-2])
         print "Assuming log10 spaced grid..."
-    else:
-        print "Error: Something is wrong with the log check! Exiting!"
-        return
 
     ## Need to fill guard cells for derivative quantities
     # Build warp amplitude Psi
