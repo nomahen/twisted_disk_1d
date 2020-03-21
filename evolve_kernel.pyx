@@ -7,6 +7,7 @@ cimport numpy as np
 cimport cython
 from libc.stdio cimport printf,fopen,fclose,fprintf,FILE,sprintf
 from libc.stdlib cimport malloc
+from libc.math cimport fmin, fmax, abs
 
 ## Helper functions ##
 
@@ -17,6 +18,12 @@ def load_Q(path):
     for line in data:
         parsed.append(np.array(line.split()).astype(float))
     return np.array(parsed)[:,0]
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef double get_dt(double nu,double dr,double cfl):
+    return cfl*dr*dr/nu
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -44,11 +51,11 @@ cdef double interp_1d(double[:] x, double[:] y, double new_x, int nx):
 @cython.cdivision(True)
 def evolve(*p):
     ## Get params 
-    cdef double alpha, gamma, HoR, tilt, bhspin, r0, rw, rmin, rmax, tmax, dt_init, io_freq, smax, 
+    cdef double alpha, gamma, HoR, tilt, bhspin, r0, rw, rmin, rmax, tmax, io_freq, smax, cfl
     cdef int    ngrid,bc_type
     cdef bint   dolog
     cdef char*  io_prefix
-    alpha,gamma,HoR,tilt,bhspin,r0,rw,rmin,rmax,rho_type,tmax,dt_init,ngrid,dolog,bc,io_freq,io_prefix,Q_dim,smax,Q1_path,Q2_path,Q3_path = p  
+    alpha,gamma,HoR,tilt,bhspin,r0,rw,rmin,rmax,rho_type,tmax,cfl,ngrid,dolog,bc,io_freq,io_prefix,Q_dim,smax,Q1_path,Q2_path,Q3_path = p  
 
     ## Build interpolation functions 
 
@@ -108,9 +115,8 @@ def evolve(*p):
     nu_ref    = (-2.0/3.0)*(-1.0*10**(interp_1d(_s_arr,np.log10(-Q1_parsed + 1e-30),0,ng_Q)))*((HoR**2.0)*r0**0.5)
     t_viscous = r0*r0/nu_ref
 
-    # convert tmax, dt_init from t_viscous units to code units
+    # convert tmax, io_freq from t_viscous units to code units
     tmax    = tmax*t_viscous
-    dt_init = dt_init*t_viscous
     io_freq = io_freq*t_viscous
 
     ########
@@ -129,7 +135,7 @@ def evolve(*p):
     print "rmax      = %s [r_g]\n" % rmax
     print "rho_type  = %s \n" % rho_type
     print "tmax      = %s [t_viscous]\n" % (tmax/t_viscous)
-    print "dt_init   = %s [t_viscous]\n" % (dt_init/t_viscous)
+    print "cfl       = %s\n" % cfl
     print "dolog     = %s\n" % dolog
     print "bc        = %s\n" % bc
     print "io_freq   = %s [t_viscous]\n" % io_freq
@@ -171,7 +177,6 @@ def evolve(*p):
     cdef double[:] nu2 = np.zeros(ngrid)
     cdef double[:] nu3 = np.zeros(ngrid)
 
-    cdef double dt = np.copy(dt_init)
     cdef double psi_x,psi_y,psi_z
     cdef double dLxdt,dLydt,dLzdt
     cdef double f1_x,f1_y,f1_z,f2_x,f2_y,f2_z,f3_x,f3_y,f3_z,f4_x,f4_y,f4_z,f5_x,f5_y,f5_z
@@ -188,9 +193,11 @@ def evolve(*p):
     cdef double[:] s_arr = _s_arr
     cdef FILE *f_out
     cdef char[40]  io_fn
+    cdef double dt
 
     # iterate!
     while (t < tmax):
+        dt = 1000000000.
         for i in range(1,ngrid-1):
             # calculate warp parameter
             psi_x = (0.5*r[i]/dr[i-1])*(lx[i+1]-lx[i-1])
@@ -202,6 +209,9 @@ def evolve(*p):
             nu1[i] = (-2.0/3.0)*(-1.0*10**(interp_1d(s_arr,Q1_arr,psi[i],ng_Q)))*((HoR**2.0)*r[i]**0.5)
             nu2[i] = 2.0*10**(interp_1d(s_arr,Q2_arr,psi[i],ng_Q))*((HoR**2.0)*r[i]**0.5)
             nu3[i] = 10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))*((HoR**2.0)*r[i]**0.5)
+
+            # cfl condition
+            dt = fmin(dt,get_dt(fmax(fmax(nu1[i],nu2[i]),nu3[i]),dr[i-1],cfl))
 
         # fill guard cells for derivative quantities
         if   (bc_type==0): #### Apply sink boundary conditions
@@ -267,7 +277,7 @@ def evolve(*p):
 
         #### Save before updates
         if ((t%io_freq < dt)):
-            printf("t/tmax = %16.8f, dt/tmax = %16.8f\n",t/tmax,dt/tmax)
+            printf("t/tmax = %e, dt/tmax = %e\n",t/tmax,dt/tmax)
             sprintf(io_fn,"%s%d.csv",io_prefix,io_cnt)
               
             f_out = fopen(io_fn,"w")
