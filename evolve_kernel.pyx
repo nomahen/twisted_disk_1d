@@ -74,17 +74,17 @@ def evolve(*p):
     cdef double nu_ref, t_viscous
 
     # r + dr arrays can be linear or log10 spaced
-    _dr = np.zeros(len(_r))
+    _dr = np.zeros(ngrid)
     if dolog:
         _r = np.logspace(np.log10(rmin),np.log10(rmax),ngrid)
-        _dr[1:-1] = _r[1:ngrid-1]*np.log(10)*(np.log10(_r)[2:ngrid] - np.log10(_r)[:ngrid-2])
+        _dr[1:ngrid-1] = _r[1:ngrid-1]*np.log(10)*(np.log10(_r)[2:ngrid] - np.log10(_r)[:ngrid-2])
         _dr[0]  = _r[0]*np.log(10)*(np.log10(_r)[1] - np.log10(_r)[0])
-        _dr[-1] = _r[-1]*np.log(10)*(np.log10(_r)[-1] - np.log10(_r)[-2])
+        _dr[ngrid-1] = _r[ngrid-1]*np.log(10)*(np.log10(_r)[ngrid-1] - np.log10(_r)[ngrid-2])
     else:
         _r = np.linspace(rmin,rmax,ngrid)
-        _dr[1:-1] = _r[2:ngrid] - _r[:ngrid-2]
+        _dr[1:ngrid-1] = _r[2:ngrid] - _r[:ngrid-2]
         _dr[0]  = _dr[1]
-        _dr[-1] = _dr[-2]
+        _dr[ngrid-1] = _dr[ngrid-2]
 
     # orbital frequency is Keplerian
     omega = _r**(-3./2.)
@@ -200,6 +200,10 @@ def evolve(*p):
     cdef char[40]  io_fn
     cdef double dt
 
+    # trying upstream diff
+    cdef int upstream = 1
+    cdef double v_adv
+
     # iterate!
     while (t < tmax):
         dt = 1000000000.
@@ -254,9 +258,24 @@ def evolve(*p):
             f2_z = (1.0/(16.0*r[i]))*(1.0/dr[i]**2.0)*((nu2[i+1]+nu2[i])*(r[i+1]+r[i])*(Lmag[i+1]+Lmag[i])*(lz[i+1]-lz[i]) - (nu2[i]+nu2[i-1])*(r[i]+r[i-1])*(Lmag[i]+Lmag[i-1])*(lz[i]-lz[i-1]))
 
             ## f3
-            f3_x = (1.0/(8.0*r[i]))*(1.0/dr[i]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Lx[i+1] + Lx[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Lx[i] + Lx[i-1]))
-            f3_y = (1.0/(8.0*r[i]))*(1.0/dr[i]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Ly[i+1] + Ly[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Ly[i] + Ly[i-1]))
-            f3_z = (1.0/(8.0*r[i]))*(1.0/dr[i]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Lz[i+1] + Lz[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Lz[i] + Lz[i-1]))
+            if (upstream):
+                v_adv = nu2[i]*psi[i]*psi[i]/r[i] - 1.5*nu1[i]/r[i]
+                if (v_adv < 0.):
+                    f3_x = (1.0/r[i]/dr[i])*((nu2[i+1]*psi[i+1]**2. - 1.5*nu1[i+1])*Lx[i+1] - (nu2[i]*psi[i]**2. - 1.5*nu1[i])*Lx[i])
+                    f3_y = (1.0/r[i]/dr[i])*((nu2[i+1]*psi[i+1]**2. - 1.5*nu1[i+1])*Ly[i+1] - (nu2[i]*psi[i]**2. - 1.5*nu1[i])*Ly[i])
+                    f3_z = (1.0/r[i]/dr[i])*((nu2[i+1]*psi[i+1]**2. - 1.5*nu1[i+1])*Lz[i+1] - (nu2[i]*psi[i]**2. - 1.5*nu1[i])*Lz[i])
+                elif (v_adv > 0.):
+                    f3_x = (1.0/r[i]/dr[i])*((nu2[i]*psi[i]**2. - 1.5*nu1[i])*Lx[i] - (nu2[i-1]*psi[i-1]**2. - 1.5*nu1[i-1])*Lx[i-1])
+                    f3_y = (1.0/r[i]/dr[i])*((nu2[i]*psi[i]**2. - 1.5*nu1[i])*Ly[i] - (nu2[i-1]*psi[i-1]**2. - 1.5*nu1[i-1])*Ly[i-1])
+                    f3_z = (1.0/r[i]/dr[i])*((nu2[i]*psi[i]**2. - 1.5*nu1[i])*Lz[i] - (nu2[i-1]*psi[i-1]**2. - 1.5*nu1[i-1])*Lz[i-1])
+                else:
+                    f3_x = 0.
+                    f3_y = 0.
+                    f3_z = 0.
+            else:
+                f3_x = (1.0/(8.0*r[i]))*(1.0/dr[i]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Lx[i+1] + Lx[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Lx[i] + Lx[i-1]))
+                f3_y = (1.0/(8.0*r[i]))*(1.0/dr[i]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Ly[i+1] + Ly[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Ly[i] + Ly[i-1]))
+                f3_z = (1.0/(8.0*r[i]))*(1.0/dr[i]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Lz[i+1] + Lz[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Lz[i] + Lz[i-1]))
 
             ## f4
             f4_x = (1.0/(8.0*r[i]))*(1.0/dr[i]**2.0)*((nu3[i+1]+nu3[i])*(r[i+1]+r[i])*((Ly[i+1]+Ly[i])*(lz[i+1]-lz[i]) - (Lz[i+1]+Lz[i])*(ly[i+1]-ly[i])) - (nu3[i]+nu3[i-1])*(r[i]+r[i-1])*((Ly[i]+Ly[i-1])*(lz[i]-lz[i-1]) - (Lz[i]+Lz[i-1])*(ly[i]-ly[i-1])))
