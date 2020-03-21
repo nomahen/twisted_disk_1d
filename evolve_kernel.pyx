@@ -74,12 +74,17 @@ def evolve(*p):
     cdef double nu_ref, t_viscous
 
     # r + dr arrays can be linear or log10 spaced
+    _dr = np.zeros(len(_r))
     if dolog:
         _r = np.logspace(np.log10(rmin),np.log10(rmax),ngrid)
-        _dr = _r[1:ngrid-1]*np.log(10)*(np.log10(_r)[2:ngrid] - np.log10(_r)[:ngrid-2])
+        _dr[1:-1] = _r[1:ngrid-1]*np.log(10)*(np.log10(_r)[2:ngrid] - np.log10(_r)[:ngrid-2])
+        _dr[0]  = _r[0]*np.log(10)*(np.log10(_r)[1] - np.log10(_r)[0])
+        _dr[-1] = _r[-1]*np.log(10)*(np.log10(_r)[-1] - np.log10(_r)[-2])
     else:
         _r = np.linspace(rmin,rmax,ngrid)
-        _dr = _r[2:ngrid] - _r[:ngrid-2]
+        _dr[1:-1] = _r[2:ngrid] - _r[:ngrid-2]
+        _dr[0]  = _dr[1]
+        _dr[-1] = _dr[-2]
 
     # orbital frequency is Keplerian
     omega = _r**(-3./2.)
@@ -200,9 +205,9 @@ def evolve(*p):
         dt = 1000000000.
         for i in range(1,ngrid-1):
             # calculate warp parameter
-            psi_x = (0.5*r[i]/dr[i-1])*(lx[i+1]-lx[i-1])
-            psi_y = (0.5*r[i]/dr[i-1])*(ly[i+1]-ly[i-1])
-            psi_z = (0.5*r[i]/dr[i-1])*(lz[i+1]-lz[i-1])
+            psi_x = (0.5*r[i]/dr[i])*(lx[i+1]-lx[i-1])
+            psi_y = (0.5*r[i]/dr[i])*(ly[i+1]-ly[i-1])
+            psi_z = (0.5*r[i]/dr[i])*(lz[i+1]-lz[i-1])
             psi[i] = (psi_x*psi_x + psi_y*psi_y + psi_z*psi_z)**0.5
 
             # calculate nu1,nu2,nu3
@@ -211,7 +216,7 @@ def evolve(*p):
             nu3[i] = 10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))*((HoR**2.0)*r[i]**0.5)
 
             # cfl condition
-            dt = fmin(dt,get_dt(fmax(fmax(nu1[i],nu2[i]),nu3[i]),dr[i-1],cfl))
+            dt = fmin(dt,get_dt(fmax(fmax(nu1[i],nu2[i]),nu3[i]),dr[i],cfl))
 
         # fill guard cells for derivative quantities
         if   (bc_type==0): #### Apply sink boundary conditions
@@ -239,24 +244,24 @@ def evolve(*p):
         for i in range(1,ngrid-1):
 
             ## f1
-            f1_x = (3.0/(4.0*r[i]))*(1.0/dr[i-1]**2.0)*((r[i+1]+r[i])*(lx[i+1]+lx[i])*(nu1[i+1]*Lmag[i+1]-nu1[i]*Lmag[i]) - (r[i]+r[i-1])*(lx[i]+lx[i-1])*(nu1[i]*Lmag[i]-nu1[i-1]*Lmag[i-1]))
-            f1_y = (3.0/(4.0*r[i]))*(1.0/dr[i-1]**2.0)*((r[i+1]+r[i])*(ly[i+1]+ly[i])*(nu1[i+1]*Lmag[i+1]-nu1[i]*Lmag[i]) - (r[i]+r[i-1])*(ly[i]+ly[i-1])*(nu1[i]*Lmag[i]-nu1[i-1]*Lmag[i-1]))
-            f1_z = (3.0/(4.0*r[i]))*(1.0/dr[i-1]**2.0)*((r[i+1]+r[i])*(lz[i+1]+lz[i])*(nu1[i+1]*Lmag[i+1]-nu1[i]*Lmag[i]) - (r[i]+r[i-1])*(lz[i]+lz[i-1])*(nu1[i]*Lmag[i]-nu1[i-1]*Lmag[i-1]))
+            f1_x = (3.0/(4.0*r[i]))*(1.0/dr[i]**2.0)*((r[i+1]+r[i])*(lx[i+1]+lx[i])*(nu1[i+1]*Lmag[i+1]-nu1[i]*Lmag[i]) - (r[i]+r[i-1])*(lx[i]+lx[i-1])*(nu1[i]*Lmag[i]-nu1[i-1]*Lmag[i-1]))
+            f1_y = (3.0/(4.0*r[i]))*(1.0/dr[i]**2.0)*((r[i+1]+r[i])*(ly[i+1]+ly[i])*(nu1[i+1]*Lmag[i+1]-nu1[i]*Lmag[i]) - (r[i]+r[i-1])*(ly[i]+ly[i-1])*(nu1[i]*Lmag[i]-nu1[i-1]*Lmag[i-1]))
+            f1_z = (3.0/(4.0*r[i]))*(1.0/dr[i]**2.0)*((r[i+1]+r[i])*(lz[i+1]+lz[i])*(nu1[i+1]*Lmag[i+1]-nu1[i]*Lmag[i]) - (r[i]+r[i-1])*(lz[i]+lz[i-1])*(nu1[i]*Lmag[i]-nu1[i-1]*Lmag[i-1]))
 
             ## f2
-            f2_x = (1.0/(16.0*r[i]))*(1.0/dr[i-1]**2.0)*((nu2[i+1]+nu2[i])*(r[i+1]+r[i])*(Lmag[i+1]+Lmag[i])*(lx[i+1]-lx[i]) - (nu2[i]+nu2[i-1])*(r[i]+r[i-1])*(Lmag[i]+Lmag[i-1])*(lx[i]-lx[i-1]))
-            f2_y = (1.0/(16.0*r[i]))*(1.0/dr[i-1]**2.0)*((nu2[i+1]+nu2[i])*(r[i+1]+r[i])*(Lmag[i+1]+Lmag[i])*(ly[i+1]-ly[i]) - (nu2[i]+nu2[i-1])*(r[i]+r[i-1])*(Lmag[i]+Lmag[i-1])*(ly[i]-ly[i-1]))
-            f2_z = (1.0/(16.0*r[i]))*(1.0/dr[i-1]**2.0)*((nu2[i+1]+nu2[i])*(r[i+1]+r[i])*(Lmag[i+1]+Lmag[i])*(lz[i+1]-lz[i]) - (nu2[i]+nu2[i-1])*(r[i]+r[i-1])*(Lmag[i]+Lmag[i-1])*(lz[i]-lz[i-1]))
+            f2_x = (1.0/(16.0*r[i]))*(1.0/dr[i]**2.0)*((nu2[i+1]+nu2[i])*(r[i+1]+r[i])*(Lmag[i+1]+Lmag[i])*(lx[i+1]-lx[i]) - (nu2[i]+nu2[i-1])*(r[i]+r[i-1])*(Lmag[i]+Lmag[i-1])*(lx[i]-lx[i-1]))
+            f2_y = (1.0/(16.0*r[i]))*(1.0/dr[i]**2.0)*((nu2[i+1]+nu2[i])*(r[i+1]+r[i])*(Lmag[i+1]+Lmag[i])*(ly[i+1]-ly[i]) - (nu2[i]+nu2[i-1])*(r[i]+r[i-1])*(Lmag[i]+Lmag[i-1])*(ly[i]-ly[i-1]))
+            f2_z = (1.0/(16.0*r[i]))*(1.0/dr[i]**2.0)*((nu2[i+1]+nu2[i])*(r[i+1]+r[i])*(Lmag[i+1]+Lmag[i])*(lz[i+1]-lz[i]) - (nu2[i]+nu2[i-1])*(r[i]+r[i-1])*(Lmag[i]+Lmag[i-1])*(lz[i]-lz[i-1]))
 
             ## f3
-            f3_x = (1.0/(8.0*r[i]))*(1.0/dr[i-1]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Lx[i+1] + Lx[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Lx[i] + Lx[i-1]))
-            f3_y = (1.0/(8.0*r[i]))*(1.0/dr[i-1]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Ly[i+1] + Ly[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Ly[i] + Ly[i-1]))
-            f3_z = (1.0/(8.0*r[i]))*(1.0/dr[i-1]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Lz[i+1] + Lz[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Lz[i] + Lz[i-1]))
+            f3_x = (1.0/(8.0*r[i]))*(1.0/dr[i]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Lx[i+1] + Lx[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Lx[i] + Lx[i-1]))
+            f3_y = (1.0/(8.0*r[i]))*(1.0/dr[i]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Ly[i+1] + Ly[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Ly[i] + Ly[i-1]))
+            f3_z = (1.0/(8.0*r[i]))*(1.0/dr[i]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Lz[i+1] + Lz[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Lz[i] + Lz[i-1]))
 
             ## f4
-            f4_x = (1.0/(8.0*r[i]))*(1.0/dr[i-1]**2.0)*((nu3[i+1]+nu3[i])*(r[i+1]+r[i])*((Ly[i+1]+Ly[i])*(lz[i+1]-lz[i]) - (Lz[i+1]+Lz[i])*(ly[i+1]-ly[i])) - (nu3[i]+nu3[i-1])*(r[i]+r[i-1])*((Ly[i]+Ly[i-1])*(lz[i]-lz[i-1]) - (Lz[i]+Lz[i-1])*(ly[i]-ly[i-1])))
-            f4_y = (1.0/(8.0*r[i]))*(1.0/dr[i-1]**2.0)*((nu3[i+1]+nu3[i])*(r[i+1]+r[i])*((Lz[i+1]+Lz[i])*(lx[i+1]-lx[i]) - (Lx[i+1]+Lx[i])*(lz[i+1]-lz[i])) - (nu3[i]+nu3[i-1])*(r[i]+r[i-1])*((Lz[i]+Lz[i-1])*(lx[i]-lx[i-1]) - (Lx[i]+Lx[i-1])*(lz[i]-lz[i-1])))
-            f4_z = (1.0/(8.0*r[i]))*(1.0/dr[i-1]**2.0)*((nu3[i+1]+nu3[i])*(r[i+1]+r[i])*((Lx[i+1]+Lx[i])*(ly[i+1]-ly[i]) - (Ly[i+1]+Ly[i])*(lx[i+1]-lx[i])) - (nu3[i]+nu3[i-1])*(r[i]+r[i-1])*((Lx[i]+Lx[i-1])*(ly[i]-ly[i-1]) - (Ly[i]+Ly[i-1])*(lx[i]-lx[i-1])))
+            f4_x = (1.0/(8.0*r[i]))*(1.0/dr[i]**2.0)*((nu3[i+1]+nu3[i])*(r[i+1]+r[i])*((Ly[i+1]+Ly[i])*(lz[i+1]-lz[i]) - (Lz[i+1]+Lz[i])*(ly[i+1]-ly[i])) - (nu3[i]+nu3[i-1])*(r[i]+r[i-1])*((Ly[i]+Ly[i-1])*(lz[i]-lz[i-1]) - (Lz[i]+Lz[i-1])*(ly[i]-ly[i-1])))
+            f4_y = (1.0/(8.0*r[i]))*(1.0/dr[i]**2.0)*((nu3[i+1]+nu3[i])*(r[i+1]+r[i])*((Lz[i+1]+Lz[i])*(lx[i+1]-lx[i]) - (Lx[i+1]+Lx[i])*(lz[i+1]-lz[i])) - (nu3[i]+nu3[i-1])*(r[i]+r[i-1])*((Lz[i]+Lz[i-1])*(lx[i]-lx[i-1]) - (Lx[i]+Lx[i-1])*(lz[i]-lz[i-1])))
+            f4_z = (1.0/(8.0*r[i]))*(1.0/dr[i]**2.0)*((nu3[i+1]+nu3[i])*(r[i+1]+r[i])*((Lx[i+1]+Lx[i])*(ly[i+1]-ly[i]) - (Ly[i+1]+Ly[i])*(lx[i+1]-lx[i])) - (nu3[i]+nu3[i-1])*(r[i]+r[i-1])*((Lx[i]+Lx[i-1])*(ly[i]-ly[i-1]) - (Ly[i]+Ly[i-1])*(lx[i]-lx[i-1])))
 
             ## f5
             f5_x = omega_p_z[i]*(-1.0)*Ly[i]
