@@ -7,7 +7,7 @@ cimport numpy as np
 cimport cython
 from libc.stdio cimport printf,fopen,fclose,fprintf,FILE,sprintf
 from libc.stdlib cimport malloc
-from libc.math cimport fmin, fmax, abs
+from libc.math cimport fmin, fmax, fabs
 
 ## Helper functions ##
 
@@ -108,6 +108,14 @@ def evolve(*p):
     amom_mag     = density * omega * _r * _r # angular momentum magnitude
     amom_unit    = np.array([np.sin(tilt),0.0,np.cos(tilt)]) # single amom unit vector
     amom_uvector = np.array([amom_unit]*ngrid) # amom unit vector extended to radial grid
+    #prec_c = 180.0*np.pi/180.
+    #rc = 30. 
+    #amom_unit_inner   = np.array([np.sin(tilt),0.0,np.cos(tilt)]) # amom unit vector, r < rc
+    #amom_unit_outer   = np.array([np.sin(tilt)*np.cos(prec_c),np.sin(tilt)*np.sin(prec_c),np.cos(tilt)]) # amom unit vector, r > rc
+    #amom_uvector = np.ones((ngrid,3))       # build array for anuglar momentum unit vectors
+    #amom_uvector[_r<=rc] *= amom_unit_inner # set array at r <= rc
+    #amom_uvector[_r>rc]  *= amom_unit_outer # set array at r >  rc
+
     _amom_vector  = np.copy(amom_uvector) # building [Lx,Ly,Lz] for each radial grid element
     for j in range(3): _amom_vector[:,j] *= amom_mag
 
@@ -220,19 +228,23 @@ def evolve(*p):
             nu3[i] = 10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))*((HoR**2.0)*r[i]**0.5)
 
             # cfl condition
-            dt = fmin(dt,get_dt(fmax(fmax(nu1[i],nu2[i]),nu3[i]),dr[i],cfl))
+            #dt = fmin(dt,get_dt(fmax(fmax(nu1[i],nu2[i]),nu3[i]),dr[i],cfl))
+            #dt = fmin(dt,cfl*dr[i]*dr[i]/(nu1[i]*3.))
+            #dt = fmin(dt,cfl*2.*dr[i]*dr[i]/nu2[i])
+            #dt = fmin(dt,cfl*dr[i]*dr[i]/nu3[i])
+            #dt = fmin(dt,cfl*dr[i]/fabs(nu2[i]*psi[i]*psi[i]/r[i] - 1.5*nu1[i]/r[i]))
+            dt = fmin(dt,cfl*0.5*dr[i]/((nu1[i]*3./dr[i]) + (nu2[i]*0.5/dr[i]) + (nu3[i]/dr[i]) + fabs(nu2[i]*psi[i]*psi[i]/r[i] - 1.5*nu1[i]/r[i])))
 
         # fill guard cells for derivative quantities
         if   (bc_type==0): #### Apply sink boundary conditions
-            psi[0] = 1e-10 * psi[1]
-            psi[ngrid-1] = 1e-10 * psi[ngrid-2]
-            nu1[0] = 1e-10 * nu1[1]
-            nu1[ngrid-1] = 1e-10 * nu1[ngrid-2]
-            nu2[0] = 1e-10 * nu2[1]
-            nu2[ngrid-1] = 1e-10 * nu2[ngrid-2]
-            nu3[0] = 1e-10 * nu3[1]
-            nu3[ngrid-1] = 1e-10 * nu3[ngrid-2]
-
+            psi[0] = 1e-10 #* psi[1]
+            psi[ngrid-1] = 1e-10 #* psi[ngrid-2]
+            nu1[0] = 1e-10 #* nu1[1]
+            nu1[ngrid-1] = 1e-10 #* nu1[ngrid-2]
+            nu2[0] = 1e-10 #* nu2[1]
+            nu2[ngrid-1] = 1e-10 #* nu2[ngrid-2]
+            nu3[0] = 1e-10 #* nu3[1]
+            nu3[ngrid-1] = 1e-10 #* nu3[ngrid-2]
         elif (bc_type==1): #### Apply outflow boundary conditions
             psi[0] = psi[1]
             psi[ngrid-1] = psi[ngrid-2]
@@ -310,21 +322,22 @@ def evolve(*p):
                 fprintf(f_out, "%e ", Ly[i])
                 fprintf(f_out, "%e ", Lz[i])
                 fprintf(f_out, "%e ", r[i])
+                fprintf(f_out, "%e ", nu1[i])
+                fprintf(f_out, "%e ", nu2[i])
+                fprintf(f_out, "%e ", nu3[i])
                 fprintf(f_out, "\n")
             fclose(f_out)
             io_cnt += 1
 
         # Apply BCs
         if   (bc_type==0): #### Apply sink boundary conditions
-            bc_type = 0
             Lx[0] = 1e-10 * Lx[1]
             Lx[ngrid-1] = 1e-10 * Lx[ngrid-2]
-            Ly[0] = 1e-10 * Ly[1]
+            Ly[0] = 1e-10 #* Ly[1]
             Ly[ngrid-1] = 1e-10 * Ly[ngrid-2]
             Lz[0] = 1e-10 * Lz[1]
             Lz[ngrid-1] = 1e-10 * Lz[ngrid-2]
         elif (bc_type==1): #### Apply outflow boundary conditions
-            bc_type = 1
             Lx[0] = Lx[1];
             Lx[ngrid-1] = Lx[ngrid-2];
             Ly[0] = Ly[1];
