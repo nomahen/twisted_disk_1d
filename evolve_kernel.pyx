@@ -177,16 +177,19 @@ def evolve(*p):
     cdef double[:] lz = _amom_vector[:,2]/np.sqrt(_amom_vector[:,0]**2.0 + _amom_vector[:,1]**2.0 + _amom_vector[:,2]**2.0)
     cdef double[:] omega_p_z = np.copy(_omega_p[:,2])
 
-    cdef double[:] psi = np.zeros(ngrid)
-    cdef double[:] Q1  = np.zeros(ngrid)
-    cdef double[:] Q2  = np.zeros(ngrid)
-    cdef double[:] Q3  = np.zeros(ngrid)
-    cdef double[:] nu1 = np.zeros(ngrid)
-    cdef double[:] nu2 = np.zeros(ngrid)
-    cdef double[:] nu3 = np.zeros(ngrid)
+    cdef double[:] psi   = np.zeros(ngrid)
+    cdef double[:] Q1    = np.zeros(ngrid)
+    cdef double[:] Q2    = np.zeros(ngrid)
+    cdef double[:] Q3    = np.zeros(ngrid)
+    cdef double[:] nu1   = np.zeros(ngrid)
+    cdef double[:] nu2   = np.zeros(ngrid)
+    cdef double[:] nu3   = np.zeros(ngrid)
+    cdef double[:] dLxdt = np.zeros(ngrid)
+    cdef double[:] dLydt = np.zeros(ngrid)
+    cdef double[:] dLzdt = np.zeros(ngrid)
+    cdef double[:] dSdt  = np.zeros(ngrid)
 
     cdef double psi_x,psi_y,psi_z
-    cdef double dLxdt,dLydt,dLzdt,dSdt
     cdef double f1_x,f1_y,f1_z,f2_x,f2_y,f2_z,f3_x,f3_y,f3_z,f4_x,f4_y,f4_z,f5_x,f5_y,f5_z
     cdef double g1,g2 # for mass equation
     cdef double small = 1e-30
@@ -202,51 +205,33 @@ def evolve(*p):
     cdef double[:] s_arr = _s_arr
     cdef FILE *f_out
     cdef char[40]  io_fn
-    cdef double dt
+    cdef double dt 
 
     # trying upstream diff
     cdef int upstream = 1
     cdef double v_adv
     cdef double Lmag_tmp
 
+    ## initialize psi, nu
+    for i in range(1,ngrid-1):
+        # calculate warp parameter
+        psi_x = (0.5*r[i]/dr[i])*(lx[i+1]-lx[i-1])
+        psi_y = (0.5*r[i]/dr[i])*(ly[i+1]-ly[i-1])
+        psi_z = (0.5*r[i]/dr[i])*(lz[i+1]-lz[i-1])
+        psi[i] = (psi_x*psi_x + psi_y*psi_y + psi_z*psi_z)**0.5
+
+        # calculate nu1,nu2,nu3
+        nu1[i] = (-2.0/3.0)*(-1.0*10**(interp_1d(s_arr,Q1_arr,psi[i],ng_Q)))*((HoR**2.0)*r[i]**0.5)
+        nu2[i] = 2.0*10**(interp_1d(s_arr,Q2_arr,psi[i],ng_Q))*((HoR**2.0)*r[i]**0.5)
+        nu3[i] = 10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))*((HoR**2.0)*r[i]**0.5)
+
     # iterate!
     while (t < tmax):
-        dt = 1000000000.
+
+        ### cfl condition
+        dt = 100000000
         for i in range(1,ngrid-1):
-            # calculate warp parameter
-            psi_x = (0.5*r[i]/dr[i])*(lx[i+1]-lx[i-1])
-            psi_y = (0.5*r[i]/dr[i])*(ly[i+1]-ly[i-1])
-            psi_z = (0.5*r[i]/dr[i])*(lz[i+1]-lz[i-1])
-            psi[i] = (psi_x*psi_x + psi_y*psi_y + psi_z*psi_z)**0.5
-
-            # calculate nu1,nu2,nu3
-            nu1[i] = (-2.0/3.0)*(-1.0*10**(interp_1d(s_arr,Q1_arr,psi[i],ng_Q)))*((HoR**2.0)*r[i]**0.5)
-            nu2[i] = 2.0*10**(interp_1d(s_arr,Q2_arr,psi[i],ng_Q))*((HoR**2.0)*r[i]**0.5)
-            nu3[i] = 10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))*((HoR**2.0)*r[i]**0.5)
-
-            # cfl condition
             dt = fmin(dt,cfl*0.5*dr[i]/((nu1[i]*3./dr[i]) + (nu2[i]*0.5/dr[i]) + (nu3[i]/dr[i]) + fabs(nu2[i]*psi[i]*psi[i]/r[i] - 1.5*nu1[i]/r[i])))
-
-        # fill guard cells for derivative quantities
-        if   (bc_type==0): #### Apply sink boundary conditions
-            psi[0] = 1e-10 #* psi[1]
-            psi[ngrid-1] = 1e-10 #* psi[ngrid-2]
-            nu1[0] = 1e-10 #* nu1[1]
-            nu1[ngrid-1] = 1e-10 #* nu1[ngrid-2]
-            nu2[0] = 1e-10 #* nu2[1]
-            nu2[ngrid-1] = 1e-10 #* nu2[ngrid-2]
-            nu3[0] = 1e-10 #* nu3[1]
-            nu3[ngrid-1] = 1e-10 #* nu3[ngrid-2]
-        elif (bc_type==1): #### Apply outflow boundary conditions
-            psi[0] = psi[1]
-            psi[ngrid-1] = psi[ngrid-2]
-            nu1[0] = nu1[1]
-            nu1[ngrid-1] = nu1[ngrid-2]
-            nu2[0] = nu2[1]
-            nu2[ngrid-1] = nu2[ngrid-2]
-            nu3[0] = nu3[1]
-            nu3[ngrid-1] = nu3[ngrid-2]
-
 
         #### Lets begin constructing the terms to evolve Lx, Ly, and Lz
         for i in range(1,ngrid-1):
@@ -295,26 +280,11 @@ def evolve(*p):
             ## g1 
             g1 = (1.0/r[i]/dr[i])*(((r[i+1]**0.5 + r[i]**0.5)/(dr[i+1] + dr[i]))*(nu1[i+1]*density[i+1]*r[i+1]**0.5 - nu1[i]*density[i]*r[i]**0.5) - ((r[i]**0.5 + r[i-1]**0.5)/(dr[i] + dr[i-1]))*(nu1[i]*density[i]*r[i]**0.5 - nu1[i-1]*density[i-1]*r[i-1]**0.5))
 
-            #### Apply updates!
-            dLxdt = f1_x + f2_x + f3_x + f4_x + f5_x
-            dLydt = f1_y + f2_y + f3_y + f4_y + f5_y
-            dLzdt = f1_z + f2_z + f3_z + f4_z
-            dSdt  = g1 + g2
-
-            Lx[i] = Lx[i] + dt*dLxdt
-            Ly[i] = Ly[i] + dt*dLydt
-            Lz[i] = Lz[i] + dt*dLzdt
-            density[i] = density[i] + dt*dSdt
-            Lmag[i] = (Lx[i]**2.0 + Ly[i]**2.0 + Lz[i]**2.0)**0.5
-            #Lx[i] = Lx[i] + dt*f5_x
-            #Ly[i] = Ly[i] + dt*f5_y
-            #Lmag_tmp = (Lx[i]**2.0 + Ly[i]**2.0 + Lz[i]**2.0)**0.5
-            #Lx[i] *= Lmag[i]/Lmag_tmp
-            #Ly[i] *= Lmag[i]/Lmag_tmp
-
-            lx[i] = Lx[i]/Lmag[i]
-            ly[i] = Ly[i]/Lmag[i]
-            lz[i] = Lz[i]/Lmag[i]
+            #### Fill derivative arrays
+            dLxdt[i] = f1_x + f2_x + f3_x + f4_x + f5_x
+            dLydt[i] = f1_y + f2_y + f3_y + f4_y + f5_y
+            dLzdt[i] = f1_z + f2_z + f3_z + f4_z
+            dSdt[i]  = g1 + g2
 
         #### Save before updates
         if ((t%io_freq < dt)):
@@ -335,6 +305,29 @@ def evolve(*p):
             fclose(f_out)
             io_cnt += 1
 
+        ## Apply updates!
+        for i in range(1,ngrid-1):
+            Lx[i] = Lx[i] + dt*dLxdt[i]
+            Ly[i] = Ly[i] + dt*dLydt[i]
+            Lz[i] = Lz[i] + dt*dLzdt[i]
+            density[i] = density[i] + dt*dSdt[i]
+            Lmag[i] = (Lx[i]**2.0 + Ly[i]**2.0 + Lz[i]**2.0)**0.5
+
+            lx[i] = Lx[i]/Lmag[i]
+            ly[i] = Ly[i]/Lmag[i]
+            lz[i] = Lz[i]/Lmag[i]
+        for i in range(1,ngrid-1):
+            # calculate warp parameter
+            psi_x = (0.5*r[i]/dr[i])*(lx[i+1]-lx[i-1])
+            psi_y = (0.5*r[i]/dr[i])*(ly[i+1]-ly[i-1])
+            psi_z = (0.5*r[i]/dr[i])*(lz[i+1]-lz[i-1])
+            psi[i] = (psi_x*psi_x + psi_y*psi_y + psi_z*psi_z)**0.5
+            # calculate nu1,nu2,nu3
+            nu1[i] = (-2.0/3.0)*(-1.0*10**(interp_1d(s_arr,Q1_arr,psi[i],ng_Q)))*((HoR**2.0)*r[i]**0.5)
+            nu2[i] = 2.0*10**(interp_1d(s_arr,Q2_arr,psi[i],ng_Q))*((HoR**2.0)*r[i]**0.5)
+            nu3[i] = 10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))*((HoR**2.0)*r[i]**0.5)
+
+
         # Apply BCs
         if   (bc_type==0): #### Apply sink boundary conditions
             Lx[0] = 1e-10 * Lx[1]
@@ -345,6 +338,14 @@ def evolve(*p):
             Lz[ngrid-1] = 1e-10 * Lz[ngrid-2]
             density[0] = 1e-10 * density[1]
             density[ngrid-1] = 1e-10 * density[ngrid-2]
+            psi[0] = 1e-10 * psi[1]
+            psi[ngrid-1] = 1e-10 * psi[ngrid-2]
+            nu1[0] = 1e-10 * nu1[1]
+            nu1[ngrid-1] = 1e-10 * nu1[ngrid-2]
+            nu2[0] = 1e-10 * nu2[1]
+            nu2[ngrid-1] = 1e-10 * nu2[ngrid-2]
+            nu3[0] = 1e-10 * nu3[1]
+            nu3[ngrid-1] = 1e-10 * nu3[ngrid-2]
         elif (bc_type==1): #### Apply outflow boundary conditions
             Lx[0] = Lx[1];
             Lx[ngrid-1] = Lx[ngrid-2];
@@ -354,6 +355,14 @@ def evolve(*p):
             Lz[ngrid-1] = Lz[ngrid-2];
             density[0] = density[1];
             density[ngrid-1] = density[ngrid-2];
+            psi[0] = psi[1]
+            psi[ngrid-1] = psi[ngrid-2]
+            nu1[0] = nu1[1]
+            nu1[ngrid-1] = nu1[ngrid-2]
+            nu2[0] = nu2[1]
+            nu2[ngrid-1] = nu2[ngrid-2]
+            nu3[0] = nu3[1]
+            nu3[ngrid-1] = nu3[ngrid-2]
 
         #### Update timestep
         t += dt
