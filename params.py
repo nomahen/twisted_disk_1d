@@ -5,23 +5,23 @@ alpha    = 0.2      # alpha viscosity [HoR < alpha < 1]
 gamma    = 1.0      # adiabatic index [1. < gamma < 5./3.]
 HoR      = 1.e-3    # disk scale height [HoR < alpha < 1]
 tilt     = 10.      # initial disk tilt [degrees; 0 < tilt < 90]
-bhspin   = 0.       # black hole spin [0 < bhspin < 1]
-r0       = 50.      # midpoint of density distribution [r_g; rmin < r0 < rmax]
-rw       = 20.      # Gaussian width of density distribution [r_g; rw > 0]
-rmin     = 10.0     # Inner radius of disk [r_g]
-rmax     = 100.0    # Outer radius of disk [r_g]
+bhspin   = 1.       # black hole spin [0 < bhspin < 1]
+r0       = 500.     # midpoint of density distribution [r_g; rmin < r0 < rmax]
+rw       = 200.     # Gaussian width of density distribution [r_g; rw > 0]
+rmin     = 60.0     # Inner radius of disk [r_g]
+rmax     = 1000.0   # Outer radius of disk [r_g]
 rho_type = "gauss"  # Type of density distribution ["gauss" or "flat"]
 
 # Numerical parameters
 tmax    = 0.1     # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
-cfl     = 0.01    # Courant-Friedrichs-Lewy number
+cfl     = 0.001   # Courant-Friedrichs-Lewy number
 ngrid   = 100     # num grid points
 dolog   = True    # whether to logarithmically space grid
 bc      = "sink"  # boundary condition ["sink" or "outflow"]
 
 # Output
 io_freq   = 1e-5                # frequency of outputs [t_viscous]
-io_prefix = "./outputs/evolve_test_" # prefix for output files
+io_prefix = "./outputs/evolve_rmin60_" # prefix for output files
 
 # Q1, Q2, Q3
 Q_dim = "1d" # Dimension of Q tables ["1d" or "2d"]

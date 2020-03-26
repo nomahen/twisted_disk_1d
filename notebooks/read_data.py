@@ -12,13 +12,13 @@ def build_table(filename):
     nu1 = data_array[:,4]
     nu2 = data_array[:,5]
     nu3 = data_array[:,6]
+    rho = data_array[:,7]
 
     ## Get more quantities
     L = np.sqrt(Lx*Lx + Ly*Ly + Lz*Lz)
     lx = Lx/L
     ly = Ly/L
     lz = Lz/L
-    rho = L*r**(-1./2.)
     tilt = np.arcsin(np.sqrt(lx*lx + ly*ly))*180.0/np.pi
     prec = np.arctan2(ly,lx)*180.0/np.pi
 
