@@ -7,7 +7,16 @@ cimport numpy as np
 cimport cython
 from libc.stdio cimport printf,fopen,fclose,fprintf,FILE,sprintf
 from libc.stdlib cimport malloc
-from libc.math cimport fmin, fmax, fabs
+from libc.math cimport fmin, fmax, fabs, asin
+
+
+cdef double mycreal(double complex dc):
+    cdef double complex* dcptr = &dc
+    return (<double *>dcptr)[0]
+
+cdef double mycimag(double complex dc):
+    cdef double complex* dcptr = &dc
+    return (<double *>dcptr)[1]
 
 ## Helper functions ##
 
@@ -210,7 +219,11 @@ def evolve(*p):
     # trying upstream diff
     cdef int upstream = 1
     cdef double v_adv
-    cdef double Lmag_tmp
+    cdef double lmag_tmp
+    cdef double complex L_imag,exparg
+    cdef double complex I = 1j
+    cdef extern from "<complex.h>":# namespace "std":
+        long double complex cexp(double complex)
 
     ## initialize psi, nu
     for i in range(1,ngrid-1):
@@ -263,6 +276,7 @@ def evolve(*p):
                     f3_x = 0.
                     f3_y = 0.
                     f3_z = 0.
+                    g2   = 0.
             else:
                 f3_x = (1.0/(8.0*r[i]))*(1.0/dr[i]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Lx[i+1] + Lx[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Lx[i] + Lx[i-1]))
                 f3_y = (1.0/(8.0*r[i]))*(1.0/dr[i]**3.0)*((0.5*(nu2[i+1]+nu2[i])*((r[i+1]+r[i])**2.0)*((lx[i+1]-lx[i])**2.0 + (ly[i+1]-ly[i])**2.0 + (lz[i+1]-lz[i])**2.0) - 3.0*(nu1[i+1]+nu1[i]))*(Ly[i+1] + Ly[i]) - (0.5*(nu2[i]+nu2[i-1])*((r[i]+r[i-1])**2.0)*((lx[i]-lx[i-1])**2.0 + (ly[i]-ly[i-1])**2.0 + (lz[i]-lz[i-1])**2.0) - 3.0*(nu1[i]+nu1[i-1]))*(Ly[i] + Ly[i-1]))
@@ -281,10 +295,10 @@ def evolve(*p):
             g1 = (1.0/r[i]/dr[i])*(((r[i+1]**0.5 + r[i]**0.5)/(dr[i+1] + dr[i]))*(nu1[i+1]*density[i+1]*r[i+1]**0.5 - nu1[i]*density[i]*r[i]**0.5) - ((r[i]**0.5 + r[i-1]**0.5)/(dr[i] + dr[i-1]))*(nu1[i]*density[i]*r[i]**0.5 - nu1[i-1]*density[i-1]*r[i-1]**0.5))
 
             #### Fill derivative arrays
-            dLxdt[i] = f1_x + f2_x + f3_x + f4_x + f5_x
-            dLydt[i] = f1_y + f2_y + f3_y + f4_y + f5_y
+            dLxdt[i] = f1_x + f2_x + f3_x + f4_x# + f5_x
+            dLydt[i] = f1_y + f2_y + f3_y + f4_y# + f5_y
             dLzdt[i] = f1_z + f2_z + f3_z + f4_z
-            dSdt[i]  = g1 + g2
+            dSdt[i]  = 0.0#g1 + g2
 
         #### Save before updates
         if ((t%io_freq < dt)):
@@ -307,15 +321,53 @@ def evolve(*p):
 
         ## Apply updates!
         for i in range(1,ngrid-1):
-            Lx[i] = Lx[i] + dt*dLxdt[i]
-            Ly[i] = Ly[i] + dt*dLydt[i]
+            Lx[i] = Lx[i] + dt*dLxdt[i] 
+            Ly[i] = Ly[i] + dt*dLydt[i] 
             Lz[i] = Lz[i] + dt*dLzdt[i]
             density[i] = density[i] + dt*dSdt[i]
+
+            # apply LT torques analytically
+            #if (asin((lx[i]*lx[i] + ly[i]*ly[i])**0.5) > 0.05):
+            L_imag = Lx[i] + I*Ly[i]
+            exparg = I*dt*omega_p_z[i]
+            L_imag = L_imag * cexp(I*dt*omega_p_z[i])
+            #printf("exp(exparg): %32.30f + 1j* %32.30f, exparg: %32.30f\n", cexp(exparg).real,cexp(exparg).imag,exparg.imag)
+            #Lx[i] = L_imag.real
+            #Ly[i] = L_imag.imag
             Lmag[i] = (Lx[i]**2.0 + Ly[i]**2.0 + Lz[i]**2.0)**0.5
+            Lmag[i] = density[i]*r[i]**(0.5)
+            Lx[i] = mycreal(L_imag)
+            Ly[i] = mycimag(L_imag)
+
+            # add LT torque here
+            #Lx[i] = (Lx[i]*(1. - 0.25*dt*dt*omega_p_z[i]**2.) - dt*omega_p_z[i]*Ly[i])/(1. + 0.25*dt*dt*omega_p_z[i]**2.)
+            #Ly[i] = (Ly[i]*(1. - 0.25*dt*dt*omega_p_z[i]**2.) + dt*omega_p_z[i]*Lx[i])/(1. + 0.25*dt*dt*omega_p_z[i]**2.)
+
+
+
+            # add LT torque here
+            #Lx[i] = (Lx[i]*(1. - 0.25*dt*dt*omega_p_z[i]**2.) - dt*omega_p_z[i]*Ly[i])/(1. + 0.25*dt*dt*omega_p_z[i]**2.)
+            #Ly[i] = (Ly[i]*(1. - 0.25*dt*dt*omega_p_z[i]**2.) + dt*omega_p_z[i]*Lx[i])/(1. + 0.25*dt*dt*omega_p_z[i]**2.)
+            #lmag_tmp = (Lx[i]**2.0 + Ly[i]**2.0 + Lz[i]**2.0)**0.5
+            #Lx[i] = Lx[i] * Lmag[i]/lmag_tmp
+            #Ly[i] = Ly[i] * Lmag[i]/lmag_tmp
+            #Lz[i] = Lz[i] * Lmag[i]/lmag_tmp
 
             lx[i] = Lx[i]/Lmag[i]
             ly[i] = Ly[i]/Lmag[i]
             lz[i] = Lz[i]/Lmag[i]
+
+
+            #lx[i] = (lx[i]*(1. - 0.25*dt*dt*omega_p_z[i]**2.) - dt*omega_p_z[i]*ly[i])/(1. + 0.25*dt*dt*omega_p_z[i]**2.)
+            #ly[i] = (ly[i]*(1. - 0.25*dt*dt*omega_p_z[i]**2.) + dt*omega_p_z[i]*lx[i])/(1. + 0.25*dt*dt*omega_p_z[i]**2.)
+            #lmag_tmp = (lx[i]**2. + ly[i]**2. + lz[i]**2.)**0.5
+            #lx[i] = lx[i]/lmag_tmp
+            #ly[i] = ly[i]/lmag_tmp
+            #lz[i] = lz[i]/lmag_tmp
+            #Lx[i] = Lmag[i]*lx[i]
+            #Ly[i] = Lmag[i]*ly[i]
+            #Lz[i] = Lmag[i]*lz[i]
+
         for i in range(1,ngrid-1):
             # calculate warp parameter
             psi_x = (0.5*r[i]/dr[i])*(lx[i+1]-lx[i-1])
