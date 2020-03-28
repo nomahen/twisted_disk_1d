@@ -9,7 +9,7 @@ cimport numpy as np
 cimport cython
 from libc.stdio cimport printf,fopen,fclose,fprintf,FILE,sprintf
 from libc.stdlib cimport malloc
-from libc.math cimport fmin, fmax
+from libc.math cimport fmin, fmax, fabs, isnan
 
  
 cdef double mycreal(double complex dc):
@@ -239,7 +239,6 @@ def evolve(*p):
     t = 0.
     while (t < tmax):
  
-        printf("t/tmax = %e, dt/tmax = %e\n",t/tmax,dt/tmax)
         #### Save before updates
         if ((t%io_freq < dt)):
             printf("t/tmax = %e, dt/tmax = %e\n",t/tmax,dt/tmax)
@@ -267,8 +266,8 @@ def evolve(*p):
             L[i]   = (Lx[i]**2. + Ly[i]**2. + Lz[i])**0.5
             psi[i] = (0.5/dx)*( (lx[i+1] - lx[i-1])**2. + (ly[i+1] - ly[i-1])**2. + (lz[i+1] - lz[i-1])**2.)**0.5
             Q1[i]  = (-1.0*10**(interp_1d(s_arr,Q1_arr,psi[i],ng_Q)))
-            Q2[i]  = 10**(interp_1d(s_arr,Q2_arr,psi[i],ng_Q))*((HoR**2.0)*r[i]**0.5)
-            Q3[i]  = 10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))*((HoR**2.0)*r[i]**0.5)
+            Q2[i]  = 10**(interp_1d(s_arr,Q2_arr,psi[i],ng_Q))
+            Q3[i]  = 10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))
 
             # center differencing for diffusive terms
             dQLrdx[i]   = (0.5/dx)*(Q1[i+1]*L[i+1]*r[i+1]**(-1.5) - Q1[i-1]*L[i-1]*r[i-1]**(-1.5))
@@ -278,6 +277,7 @@ def evolve(*p):
             Lxdldx_x[i] = Ly[i]*dldx_z[i] - Lz[i]*dldx_y[i]
             Lxdldx_y[i] = Lz[i]*dldx_x[i] - Lx[i]*dldx_z[i]
             Lxdldx_z[i] = Lx[i]*dldx_y[i] - Ly[i]*dldx_x[i]
+
 
         ## need to fill guard cell values for these quantities as well
         L[0]              = (Lx[0]**2. + Ly[0]**2. + Lz[0])**0.5
@@ -340,9 +340,9 @@ def evolve(*p):
                 fDif_z_L[i] += -0.5*(Q3[i]*r[i]**(-1.5)*Lxdldx_z[i] + Q3[i-1]*r[i-1]**(-1.5)*Lxdldx_z[i-1])
 
                 ## Combine
-                F_x_L[i] = fDif_x_L[i] + fAdv_x_L[i]
-                F_y_L[i] = fDif_y_L[i] + fAdv_y_L[i]
-                F_z_L[i] = fDif_z_L[i] + fAdv_z_L[i]
+                F_x_L[i] = (HoR**2.)*(fDif_x_L[i] + fAdv_x_L[i])
+                F_y_L[i] = (HoR**2.)*(fDif_y_L[i] + fAdv_y_L[i])
+                F_z_L[i] = (HoR**2.)*(fDif_z_L[i] + fAdv_z_L[i])
             else:
                 F_x_L[i] = 0.
                 F_y_L[i] = 0.
@@ -369,9 +369,9 @@ def evolve(*p):
                 fDif_z_R[i] += -0.5*(Q3[i]*r[i]**(-1.5)*Lxdldx_z[i] + Q3[i+1]*r[i+1]**(-1.5)*Lxdldx_z[i+1])
 
                 ## Combine
-                F_x_R[i] = fDif_x_R[i] + fAdv_x_R[i]
-                F_y_R[i] = fDif_y_R[i] + fAdv_y_R[i]
-                F_z_R[i] = fDif_z_R[i] + fAdv_z_R[i]
+                F_x_R[i] = (HoR**2.)*(fDif_x_R[i] + fAdv_x_R[i])
+                F_y_R[i] = (HoR**2.)*(fDif_y_R[i] + fAdv_y_R[i])
+                F_z_R[i] = (HoR**2.)*(fDif_z_R[i] + fAdv_z_R[i])
             else:
                 F_x_R[i] = 0.
                 F_y_R[i] = 0.
@@ -400,23 +400,27 @@ def evolve(*p):
                 F_y[i] = F_y_R[i]
                 F_z[i] = F_z_R[i]
 
-            #print "F_x_L: ", F_x_L[i], "F_x_R: ", F_x_R[i], "F_x: ", F_x[i], '\n'
-            #print "F_y_L: ", F_y_L[i], "F_y_R: ", F_y_R[i], "F_y: ", F_y[i], '\n'
-            #print "F_z_L: ", F_z_L[i], "F_z_R: ", F_z_R[i], "F_z: ", F_z[i], '\n'
-
         ## cfl condition
         # Here, we do something qualitatively similar to Equation (50) of Diego Munoz 2012
         for i in range(1,ngrid-1):
-            vel = ((F_x[i]/(Lx[i]+small))**2. + (F_y[i]/(Ly[i]+small))**2. + (F_z[i]/(Lz[i]+small))**2.)**0.5
-            #nu  = HoR**(2.)*r[i]**(0.5)*((1./9.)*Q1[i]**2. + 4.*Q2[i]**2. + Q3[i]**2.)**(0.5)
-            dt = fmin(dt,cfl*(dx/vel))#/(1. + 2.*nu/(vel*dx+small)))
-            #print "dx/vel: ", dx/vel, "dt: ", dt, '\n'
+            #vel = fabs((HoR**2.)*r[i]*( (2/L[i])*dQLrdx[i] - 2.*Q2[i]*(r[i]**(-1.5))*psi[i]**2.))
+            vel = (HoR**2.)*fabs(r[i]**(-1.5) * (Q1[i] + 2.*Q2[i]*psi[i]**2.))
+            nu  = (HoR**2.)*(r[i]**0.5)*((1./9.)*Q1[i]**2. + 4.*Q2[i]**2. + Q3[i]**2.)**(0.5)
+            dt = fmin(dt,cfl*(dx/vel))#/(1. + 2.*nu/(vel*dx)))
 
         ## update
         for i in range(1,ngrid-1):
             Lx[i] = Lx[i] - (dt/dx)*(F_x[i+1] - F_x[i])
             Ly[i] = Ly[i] - (dt/dx)*(F_y[i+1] - F_y[i])
             Lz[i] = Lz[i] - (dt/dx)*(F_z[i+1] - F_z[i])
+            Lx[i] = fmax(Lx[i],1e-1)
+            Ly[i] = fmax(Ly[i],1e-1)
+            Lz[i] = fmax(Lz[i],1e-1)
+
+        if(isnan(Lx[i]) or isnan(Ly[i]) or isnan(Lz[i])):
+            printf("nans ):\n")
+            printf("Lx[i] = %16.8f, Ly[i] = %16.8f, Lz[i] = %16.8f\n",Lx[i],Ly[i],Lz[i])
+            printf("F_x[i] = %16.8f, F_y[i] = %16.8f, F_z[i] = %16.8f\n",F_x[i],F_y[i],F_z[i])
 
         ## apply boundary conditions
         if   (bc_type==0): #### Apply sink boundary conditions
@@ -427,12 +431,12 @@ def evolve(*p):
             Lz[0] = 1e-10 * Lz[1]
             Lz[ngrid-1] = 1e-10 * Lz[ngrid-2]
         elif (bc_type==1): #### Apply outflow boundary conditions
-            Lx[0] = Lx[1];
-            Lx[ngrid-1] = Lx[ngrid-2];
-            Ly[0] = Ly[1];
-            Ly[ngrid-1] = Ly[ngrid-2];
-            Lz[0] = Lz[1];
-            Lz[ngrid-1] = Lz[ngrid-2];
+            Lx[0] = Lx[1]
+            Lx[ngrid-1] = Lx[ngrid-2]
+            Ly[0] = Ly[1]
+            Ly[ngrid-1] = Ly[ngrid-2]
+            Lz[0] = Lz[1]
+            Lz[ngrid-1] = Lz[ngrid-2]
 
         #### Update timestep
         t += dt

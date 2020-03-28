@@ -14,13 +14,12 @@ rho_type = "gauss"  # Type of density distribution ["gauss" or "flat"]
 
 # Numerical parameters
 tmax    = 0.1     # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
-cfl     = 0.01    # Courant-Friedrichs-Lewy number
+cfl     = 0.05     # Courant-Friedrichs-Lewy number
 ngrid   = 100     # num grid points
-dolog   = False   # whether to logarithmically space grid
-bc      = "sink"  # boundary condition ["sink" or "outflow"]
+bc      = "outflow"  # boundary condition ["sink" or "outflow"]
 
 # Output
-io_freq   = 1e-40                # frequency of outputs [t_viscous]
+io_freq   = 1e-5                # frequency of outputs [t_viscous]
 io_prefix = "./outputs/evolve_rmin60_" # prefix for output files
 
 # Q1, Q2, Q3
