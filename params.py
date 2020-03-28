@@ -16,11 +16,11 @@ rho_type = "gauss"  # Type of density distribution ["gauss" or "flat"]
 tmax    = 0.1     # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
 cfl     = 0.01    # Courant-Friedrichs-Lewy number
 ngrid   = 100     # num grid points
-dolog   = True    # whether to logarithmically space grid
+dolog   = False   # whether to logarithmically space grid
 bc      = "sink"  # boundary condition ["sink" or "outflow"]
 
 # Output
-io_freq   = 1e-5                # frequency of outputs [t_viscous]
+io_freq   = 1e-40                # frequency of outputs [t_viscous]
 io_prefix = "./outputs/evolve_rmin60_" # prefix for output files
 
 # Q1, Q2, Q3
@@ -32,7 +32,7 @@ Q3_path = "./tables/Q3_1d_a0.2_p0.0_g1.0_np30_ng10000.txt"
 
 #### package all params to send to evolve
 import time
-from evolve_kernel import *
+from evolve_fvm import *
 t1 = time.time()
-evolve(alpha,gamma,HoR,tilt,bhspin,r0,rw,rmin,rmax,rho_type,tmax,cfl,ngrid,dolog,bc,io_freq,io_prefix,Q_dim,smax,Q1_path,Q2_path,Q3_path)
+evolve(alpha,gamma,HoR,tilt,bhspin,r0,rw,rmin,rmax,rho_type,tmax,cfl,ngrid,bc,io_freq,io_prefix,Q_dim,smax,Q1_path,Q2_path,Q3_path)
 print "time in seconds: ", time.time() - t1
