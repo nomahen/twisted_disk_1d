@@ -6,10 +6,10 @@ gamma    = 1.0      # adiabatic index [1. < gamma < 5./3.]
 HoR      = 1.e-3    # disk scale height [HoR < alpha < 1]
 tilt     = 10.      # initial disk tilt [degrees; 0 < tilt < 90]
 bhspin   = 0.0      # black hole spin [0 < bhspin < 1]
-r0       = 500.     # midpoint of density distribution [r_g; rmin < r0 < rmax]
+r0       = 1000.    # midpoint of density distribution [r_g; rmin < r0 < rmax]
 rw       = 200.     # Gaussian width of density distribution [r_g; rw > 0]
 rmin     = 60.0     # Inner radius of disk [r_g]
-rmax     = 1000.0   # Outer radius of disk [r_g]
+rmax     = 10000.0   # Outer radius of disk [r_g]
 rho_type = "gauss"  # Type of density distribution ["gauss" or "flat"]
 
 # Numerical parameters

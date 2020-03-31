@@ -220,7 +220,7 @@ def evolve(*p):
     cdef double[:] fDif_z_L  = np.zeros(ngrid)
     cdef double[:] fDif_z_R  = np.zeros(ngrid)
 
-    # miscelanneous variables
+    # miscellaneous variables
     cdef double small = 1e-30
     cdef double[:] Q1_arr = np.log10(-Q1_parsed + small)
     cdef double[:] Q2_arr = np.log10(Q2_parsed + small)
