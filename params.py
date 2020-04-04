@@ -7,16 +7,16 @@ HoR      = 1.e-3    # disk scale height [HoR < alpha < 1]
 tilt     = 0.       # initial disk tilt [degrees; 0 < tilt < 90]
 bhspin   = 0.0      # black hole spin [0 < bhspin < 1]
 r0       = 500.     # midpoint of density distribution [r_g; rmin < r0 < rmax]
-rw       = 100.     # Gaussian width of density distribution [r_g; rw > 0]
+rw       = 60.     # Gaussian width of density distribution [r_g; rw > 0]
 rmin     = 60.0     # Inner radius of disk [r_g]
 rmax     = 1000.0   # Outer radius of disk [r_g]
 rho_type = "gauss"  # Type of density distribution ["gauss" or "flat"]
 
 # Numerical parameters
-tmax    = 1.0     # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
-cfl     = 0.8     # Courant-Friedrichs-Lewy number
-ngrid   = 100     # num grid points
-bc      = "outflow"  # boundary condition ["sink" or "outflow"]
+tmax    = 0.1    # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
+cfl     = 0.5     # Courant-Friedrichs-Lewy number
+ngrid   = 50     # num grid points
+bc      = "mix"  # boundary condition ["sink" or "outflow"]
 
 # Output
 io_freq   = 1e-5                # frequency of outputs [t_viscous]
