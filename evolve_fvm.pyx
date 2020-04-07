@@ -265,9 +265,9 @@ def evolve(*p):
 
         if (nstep == -1): exit()
  
-        #if ((t%io_freq < dt)):
-        #    printf("t/tmax = %e, dt/tmax = %e\n",t/tmax,dt/tmax)
-
+        if ((t%io_freq < dt)):
+            printf("t/tmax = %e, dt/tmax = %e\n",t/tmax,dt/tmax)
+        '''
         #### Save before updates
         if ((t%io_freq < dt)):
             printf("t/tmax = %e, dt/tmax = %e\n",t/tmax,dt/tmax)
@@ -300,7 +300,7 @@ def evolve(*p):
             fprintf(f_out, "%e ", t)
             fprintf(f_out, "\n")
             fclose(f_out)
-        '''
+        
 
         ### Reconstruct, Evolve, Average algorithm
 
