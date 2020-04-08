@@ -16,7 +16,7 @@ rho_type = "flat"  # Type of density distribution ["gauss" or "flat"]
 tmax    = 0.01    # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
 cfl     = 0.04    # Courant-Friedrichs-Lewy number
 ngrid   = 100     # num grid points
-bc      = "mix"  # boundary condition ["sink" or "outflow" or "mix"]
+bc      = "outflow"  # boundary condition ["sink" or "outflow" or "mix"]
 
 # Output
 io_freq   = 20                # how many number of steps to plot at
