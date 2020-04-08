@@ -97,9 +97,17 @@ def build_data(prefix, ngrid,order=3,convert=True):
         Q3 = master_data[:,:,6]
         t  = master_data[:,:,7] 
 
+    L = (Lx*Lx + Ly*Ly + Lz*Lz)**0.5
+    lx = Lx/L
+    ly = Ly/L
+    lz = Lz/L
+    tilt = np.arcsin(np.sqrt(lx*lx + ly*ly))*180.0/np.pi
+    prec = np.arctan2(ly,lx)*180.0/np.pi
+
+
     ## Compile tables
-    table_list   = [r,t,Lx,Ly,Lz,Q1,Q2,Q3]
-    table_titles = ["r","t","Lx","Ly","Lz","Q1","Q2","Q3"]
+    table_list   = [r,t,Lx,Ly,Lz,Q1,Q2,Q3,L,lx,ly,lz,tilt,prec]
+    table_titles = ["r","t","Lx","Ly","Lz","Q1","Q2","Q3","L","lx","ly","lz","tilt","prec"]
     return QTable(data=table_list,names=table_titles)
 
 def get_fn_list(path_to_outputs,first,last):

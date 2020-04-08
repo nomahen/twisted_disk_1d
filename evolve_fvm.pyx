@@ -53,8 +53,8 @@ cdef double interp_1d(double[:] x, double[:] y, double new_x, int nx):
 @cython.cdivision(True)
 def evolve(*p):
     ## Get params 
-    cdef double alpha, gamma, HoR, tilt, bhspin, r0, rw, rmin, rmax, tmax, io_freq, smax, cfl
-    cdef int    ngrid,bc_type
+    cdef double alpha, gamma, HoR, tilt, bhspin, r0, rw, rmin, rmax, tmax, smax, cfl
+    cdef int    ngrid, bc_type, io_freq
     cdef bint   dolog
     cdef char*  io_prefix
     alpha,gamma,HoR,tilt,bhspin,r0,rw,rmin,rmax,rho_type,tmax,cfl,ngrid,bc,io_freq,io_prefix,Q_dim,smax,Q1_path,Q2_path,Q3_path = p
@@ -117,7 +117,7 @@ def evolve(*p):
  
     # convert tmax, io_freq from t_viscous units to code units
     tmax    = tmax*t_viscous
-    io_freq = io_freq*t_viscous
+    #io_freq = io_freq*t_viscous
  
     # make bc_type
     if (bc == 'sink'):
@@ -150,7 +150,7 @@ def evolve(*p):
     print "t_viscous = %s [r_g/c]\n" % t_viscous
     print "cfl       = %s\n" % cfl
     print "bc        = %s\n" % bc
-    print "io_freq   = %s [t_viscous]\n" % (io_freq/t_viscous)
+    print "io_freq   = %s\n" % io_freq
     print "io_prefix = %s\n" % io_prefix
     print "Q_dim     = %s\n" % Q_dim
     print "smax      = %s\n" % smax
@@ -255,9 +255,9 @@ def evolve(*p):
     cdef char[40]  io_fn
     cdef int       io_cnt = 0, nstep = 0
 
-    #for i in range(ngrid):
-    #    sprintf(io_fn,"%s%d.csv",io_prefix,i)
-    #    f_out = fopen(io_fn,"w")
+    for i in range(ngrid):
+        sprintf(io_fn,"%s%d.csv",io_prefix,i)
+        f_out = fopen(io_fn,"w")
     
     # iterate!
     t = 0.
@@ -265,7 +265,7 @@ def evolve(*p):
 
         if (nstep == -1): exit()
  
-        if ((t%io_freq < dt)):
+        if (( (t/tmax)%(1e-5) < dt)):
             printf("t/tmax = %e, dt/tmax = %e\n",t/tmax,dt/tmax)
         '''
         #### Save before updates
@@ -286,20 +286,21 @@ def evolve(*p):
             fclose(f_out)
             io_cnt += 1
         '''
-        for i in range(ngrid):
-            sprintf(io_fn,"%s%d.csv",io_prefix,i)
+        if (nstep%io_freq == 0):
+            for i in range(ngrid):
+                sprintf(io_fn,"%s%d.csv",io_prefix,i)
 
-            f_out = fopen(io_fn,"a+")
-            fprintf(f_out, "%e ", Lx[i])
-            fprintf(f_out, "%e ", Ly[i])
-            fprintf(f_out, "%e ", Lz[i])
-            fprintf(f_out, "%e ", r[i])
-            fprintf(f_out, "%e ", Q1[i])
-            fprintf(f_out, "%e ", Q2[i])
-            fprintf(f_out, "%e ", Q3[i])
-            fprintf(f_out, "%e ", t)
-            fprintf(f_out, "\n")
-            fclose(f_out)
+                f_out = fopen(io_fn,"a+")
+                fprintf(f_out, "%e ", Lx[i])
+                fprintf(f_out, "%e ", Ly[i])
+                fprintf(f_out, "%e ", Lz[i])
+                fprintf(f_out, "%e ", r[i])
+                fprintf(f_out, "%e ", Q1[i])
+                fprintf(f_out, "%e ", Q2[i])
+                fprintf(f_out, "%e ", Q3[i])
+                fprintf(f_out, "%e ", t)
+                fprintf(f_out, "\n")
+                fclose(f_out)
         
 
         ### Reconstruct, Evolve, Average algorithm
@@ -408,12 +409,14 @@ def evolve(*p):
         # Here, we do something qualitatively similar to Equation (50) of Diego Munoz 2012
         for i in range(1,ngrid-1):
             ## Q2 = 0, Q3 = 0
-            vel = fabs(HoR**2. * (-1.) * Q1[i])# * r[i]**(-3./2.))
-            nu  = fabs(2. * Q1[i] * HoR**2.)# * r[i]**(-3./2.))
+            vel = fabs(HoR**2. * (-1.) * Q1[i])
+            nu  = fabs(2. * Q1[i] * HoR**2.)
             dt = fmin(dt,fabs(cfl*(dx/vel/(1. + 2.*nu/(vel*dx)))))
 
 
         # Check to make sure flux doesn't re-enter grid after it's copied out
+        F_x[ngrid-4] = fmax(0.,F_x[ngrid-4])
+        F_y[ngrid-4] = fmax(0.,F_y[ngrid-4])
         F_z[ngrid-4] = fmax(0.,F_z[ngrid-4])
 
         ## update
