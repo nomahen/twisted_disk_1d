@@ -10,12 +10,12 @@ r0       = 500.     # midpoint of density distribution [r_g; rmin < r0 < rmax]
 rw       = 60.     # Gaussian width of density distribution [r_g; rw > 0]
 rmin     = 60.0     # Inner radius of disk [r_g]
 rmax     = 1000.0   # Outer radius of disk [r_g]
-rho_type = "flat"  # Type of density distribution ["gauss" or "flat"]
+rho_type = "gauss"  # Type of density distribution ["gauss" or "flat"]
 
 # Numerical parameters
-tmax    = 0.01    # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
-cfl     = 0.04    # Courant-Friedrichs-Lewy number
-ngrid   = 100     # num grid points
+tmax    = 0.1    # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
+cfl     = 0.2    # Courant-Friedrichs-Lewy number
+ngrid   = 50     # num grid points
 bc      = "outflow"  # boundary condition ["sink" or "outflow" or "mix"]
 
 # Output

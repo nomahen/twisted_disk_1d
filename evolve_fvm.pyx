@@ -96,9 +96,9 @@ def evolve(*p):
     # is constant regardless of distribution
     # sigma ~ surface density
     if rho_type == "flat":
-        _sigma = np.ones(ngrid)*10000.
+        _sigma = np.ones(ngrid)*100.
     elif rho_type == "gauss":
-        _sigma = (1.0/(rw*np.sqrt(2.0*np.pi))) * np.exp(-0.5*((_r - r0)/rw)**2.0)# + np.ones(ngrid)
+        _sigma = (1.0/(rw*np.sqrt(2.0*np.pi))) * np.exp(-0.5*((_r - r0)/rw)**2.0) + np.ones(ngrid)
     else:
         print "Error! rho_type needs to be set to \"gauss\" or \"flat\"! Exiting"
         exit()
@@ -108,6 +108,10 @@ def evolve(*p):
     lda_mag = (HoR)**2. * _sigma * omega**2. * _r**4.
     lda_unit = np.array([np.array([np.sin(tilt),0.0,np.cos(tilt)])]*ngrid) # each annulus oriented in the same direction initially
     _lda_vec  = np.copy(lda_unit) # building [Lambda_x,Lambda_y,Lambda_z] for each radial grid element
+    if (1): # flatten inner region
+        tilt_factor = 0.9
+        _lda_vec[_r < r0,0] *= np.sin(tilt_factor*tilt)/np.sin(tilt)
+        _lda_vec[_r < r0,2] *= np.cos(tilt_factor*tilt)/np.cos(tilt)
     for j in range(3): _lda_vec[:,j] *= lda_mag
  
  
@@ -347,6 +351,7 @@ def evolve(*p):
             dQ1_dpsi_L[i] = (dQ1_dpsi[i] + dQ1_dpsi[i-1])/2.
             dQ1_dpsi_R[i] = (dQ1_dpsi[i] + dQ1_dpsi[i+1])/2.
 
+
         ## reconstruct cell-interface primitive variables
 
         for i in range(ngrid):
@@ -445,14 +450,14 @@ def evolve(*p):
             #vR = (HoR**2.) * (-1.) * Q1_L[i+2]
 
             # Get minimum signal speed by taking minimum eigen values at left and right faces, and then the minimum of those
-            vL = fmin(-Q1_R[i+1] + 2.*dpsi_dx_R[i+1]*dQ1_dpsi_R[i+1], (1./L_R[i+1]**2.)*(-1.*L_R[i+1]**2.*Q1_R[i+1] + 2.*L_R[i+1]**2.*dQ1_dpsi_R[i+1]*dpsi_dx_R[i+1] + 2.*Q1_R[i+1]*(Lx_R[i+1]*dLx_dx_R[i+1] + Ly_R[i+1]*dLy_dx_R[i+1] + Lz_R[i+1]*dLz_dx_R[i+1]))) 
-            vR = fmin(-Q1_L[i+2] + 2.*dpsi_dx_L[i+2]*dQ1_dpsi_L[i+2], (1./L_L[i+2]**2.)*(-1.*L_L[i+2]**2.*Q1_L[i+2] + 2.*L_L[i+2]**2.*dQ1_dpsi_L[i+2]*dpsi_dx_L[i+2] + 2.*Q1_L[i+2]*(Lx_L[i+2]*dLx_dx_L[i+2] + Ly_L[i+2]*dLy_dx_L[i+2] + Lz_L[i+2]*dLz_dx_L[i+2]))) 
+            vL = fmin(-Q1_R[i+1] + 2.*dpsi_dx_R[i+1]*dQ1_dpsi_R[i+1] + 2.*Q2_R[i+1]*psi_R[i+1], (1./L_R[i+1]**2.)*(L_R[i+1]**2.*(-1.*Q1_R[i+1] + 2.*dQ1_dpsi_R[i+1]*dpsi_dx_R[i+1] + 2.*Q2_R[i+1]*psi_R[i+1]**2.) + (Lx_R[i+1]*dLx_dx_R[i+1] + Ly_R[i+1]*dLy_dx_R[i+1] + Lz_R[i+1]*dLz_dx_R[i+1])*(2.*Q1_R[i+1] + Q2_R[i+1]))) 
+            vR = fmin(-Q1_L[i+2] + 2.*dpsi_dx_L[i+2]*dQ1_dpsi_L[i+2] + 2.*Q2_L[i+2]*psi_L[i+2], (1./L_L[i+2]**2.)*(L_L[i+2]**2.*(-1.*Q1_L[i+2] + 2.*dQ1_dpsi_L[i+2]*dpsi_dx_L[i+2] + 2.*Q2_L[i+2]*psi_L[i+2]**2.) + (Lx_L[i+2]*dLx_dx_L[i+2] + Ly_L[i+2]*dLy_dx_L[i+2] + Lz_L[i+2]*dLz_dx_L[i+2])*(2.*Q1_L[i+2] + Q2_L[i+2]))) 
             sL = (HoR**2.)*fmin(vL,vR)
 
 
             # Get maximum signal speed by taking maximum eigen values at left and right faces, and then the maximum of those
-            vL = fmax(-Q1_R[i+1] + 2.*dpsi_dx_R[i+1]*dQ1_dpsi_R[i+1], (1./L_R[i+1]**2.)*(-1.*L_R[i+1]**2.*Q1_R[i+1] + 2.*L_R[i+1]**2.*dQ1_dpsi_R[i+1]*dpsi_dx_R[i+1] + 2.*Q1_R[i+1]*(Lx_R[i+1]*dLx_dx_R[i+1] + Ly_R[i+1]*dLy_dx_R[i+1] + Lz_R[i+1]*dLz_dx_R[i+1]))) 
-            vR = fmax(-Q1_L[i+2] + 2.*dpsi_dx_L[i+2]*dQ1_dpsi_L[i+2], (1./L_L[i+2]**2.)*(-1.*L_L[i+2]**2.*Q1_L[i+2] + 2.*L_L[i+2]**2.*dQ1_dpsi_L[i+2]*dpsi_dx_L[i+2] + 2.*Q1_L[i+2]*(Lx_L[i+2]*dLx_dx_L[i+2] + Ly_L[i+2]*dLy_dx_L[i+2] + Lz_L[i+2]*dLz_dx_L[i+2]))) 
+            vL = fmax(-Q1_R[i+1] + 2.*dpsi_dx_R[i+1]*dQ1_dpsi_R[i+1] + 2.*Q2_R[i+1]*psi_R[i+1], (1./L_R[i+1]**2.)*(L_R[i+1]**2.*(-1.*Q1_R[i+1] + 2.*dQ1_dpsi_R[i+1]*dpsi_dx_R[i+1] + 2.*Q2_R[i+1]*psi_R[i+1]**2.) + (Lx_R[i+1]*dLx_dx_R[i+1] + Ly_R[i+1]*dLy_dx_R[i+1] + Lz_R[i+1]*dLz_dx_R[i+1])*(2.*Q1_R[i+1] + Q2_R[i+1]))) 
+            vR = fmax(-Q1_L[i+2] + 2.*dpsi_dx_L[i+2]*dQ1_dpsi_L[i+2] + 2.*Q2_L[i+2]*psi_L[i+2], (1./L_L[i+2]**2.)*(L_L[i+2]**2.*(-1.*Q1_L[i+2] + 2.*dQ1_dpsi_L[i+2]*dpsi_dx_L[i+2] + 2.*Q2_L[i+2]*psi_L[i+2]**2.) + (Lx_L[i+2]*dLx_dx_L[i+2] + Ly_L[i+2]*dLy_dx_L[i+2] + Lz_L[i+2]*dLz_dx_L[i+2])*(2.*Q1_L[i+2] + Q2_L[i+2]))) 
             sR = (HoR**2.)*fmax(vL,vR)
             
             # Equations 9.82-9.91 of dongwook ams notes
@@ -475,9 +480,11 @@ def evolve(*p):
         ## cfl condition
         # Here, we do something qualitatively similar to Equation (50) of Diego Munoz 2012
         for i in range(1,ngrid-1):
+            vel = (HoR**2.)*fmax(fabs(-Q1[i] + 2.*dpsi_dx[i]*dQ1_dpsi[i] + 2.*Q2[i]*psi[i]), fabs((1./L[i]**2.)*(L[i]**2.*(-1.*Q1[i] + 2.*dQ1_dpsi[i]*dpsi_dx[i] + 2.*Q2[i]*psi[i]**2.) + (Lx[i]*dLx_dx[i] + Ly[i]*dLy_dx[i] + Lz[i]*dLz_dx[i])*(2.*Q1[i] + Q2[i])))) 
+            nu  = (HoR**2.)*(Q1[i]**2. + Q2[i]**2. + Q3[i]**2.)**(0.5)
             ## Q2 = 0, Q3 = 0
-            vel = fabs(HoR**2. * (-1.) * Q1[i])
-            nu  = fabs(2. * Q1[i] * HoR**2.)
+            #vel = fabs(HoR**2. * (-1.) * Q1[i])
+            #nu  = fabs(2. * Q1[i] * HoR**2.)
             dt = fmin(dt,fabs(cfl*(dx/vel/(1. + 2.*nu/(vel*dx)))))
 
 
