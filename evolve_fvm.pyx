@@ -19,6 +19,17 @@ cdef double mycreal(double complex dc):
 cdef double mycimag(double complex dc):
     cdef double complex* dcptr = &dc
     return (<double *>dcptr)[1]
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef double minmod(double a, double b):
+    if   ( (fabs(a) < fabs(b)) and (a*b > 0.) ):
+            return a
+    elif ( (fabs(b) < fabs(a)) and (a*b > 0.) ):
+            return b
+    else: # ab < 0.
+            return 0.
  
 ## Helper functions ##
  
@@ -109,7 +120,7 @@ def evolve(*p):
     lda_unit = np.array([np.array([np.sin(tilt),0.0,np.cos(tilt)])]*ngrid) # each annulus oriented in the same direction initially
     _lda_vec  = np.copy(lda_unit) # building [Lambda_x,Lambda_y,Lambda_z] for each radial grid element
     if (1): # flatten inner region
-        tilt_factor = 0.9
+        tilt_factor = 0.
         _lda_vec[_r < r0,0] *= np.sin(tilt_factor*tilt)/np.sin(tilt)
         _lda_vec[_r < r0,2] *= np.cos(tilt_factor*tilt)/np.cos(tilt)
     for j in range(3): _lda_vec[:,j] *= lda_mag
@@ -121,10 +132,11 @@ def evolve(*p):
     _omega_p[:,2] = 2.0 * bhspin / _r**3.0 # x/y components are zero, z component is LT precession frequency
  
     # calculate (approximate) viscous time (t_visc = r0**2./nu1(psi=0))
-    #nu_ref    = (-2.0/3.0)*(-1.0*10**(interp_1d(_s_arr,np.log10(-Q1_parsed + 1e-30),0,ng_Q)))*((HoR**2.0)*r0**0.5)
+    nu_ref    = (-2.0/3.0)*(-1.0*10**(interp_1d(_s_arr,np.log10(-Q1_parsed + 1e-30),0,ng_Q)))*((HoR**2.0)*r0**0.5)
+    t_viscous = r0**(0.5)/nu_ref
     #t_viscous = r0**(7./2.)/nu_ref#r0*r0/nu_ref
-    nu_ref = -1.0*(-1.0*10**(interp_1d(_s_arr,np.log10(-Q1_parsed + 1e-30),0,ng_Q))) * HoR**2.
-    t_viscous  = 0.5*np.log(r0)**2. / nu_ref
+    #nu_ref = -1.0*(-1.0*10**(interp_1d(_s_arr,np.log10(-Q1_parsed + 1e-30),0,ng_Q))) * HoR**2.
+    #t_viscous  = 0.5*np.log(r0)**2. / nu_ref
  
     # convert tmax, io_freq from t_viscous units to code units
     tmax    = tmax*t_viscous
@@ -262,7 +274,9 @@ def evolve(*p):
     cdef double[:] dQ1_dpsi_arr = np.log10(dQ1_dpsi_parsed + small)
     cdef double[:] s_arr = _s_arr
     cdef double dt = 1000000000000000000.
+    cdef double tmp_slope # for data reconstruction
     cdef double aL,aR,vL,vR,sL,sR,vel,nu
+    cdef double velmax  = 0.5*HoR # 1/2 sound speed in code units
     cdef int i
 
     # io variables
@@ -314,7 +328,7 @@ def evolve(*p):
             dlz_dx[i]  = (0.5/dx) * (lz[i+1] - lz[i-1])
 
             psi[i]      = (dlx_dx[i]**2. + dly_dx[i]**2. + dlz_dx[i]**2.)**0.5
-            Q1[i]       = (-1.0*10**(interp_1d(s_arr,Q1_arr,psi[i],ng_Q)))
+            Q1[i]       = -1.0*(10**(interp_1d(s_arr,Q1_arr,psi[i],ng_Q)))
             Q2[i]       = 10**(interp_1d(s_arr,Q2_arr,psi[i],ng_Q))
             Q3[i]       = 10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))
             dQ1_dpsi[i] = 10**(interp_1d(s_arr,dQ1_dpsi_arr,psi[i],ng_Q))
@@ -325,6 +339,53 @@ def evolve(*p):
         ## get cell-interface gradients
 
         for i in range(1,ngrid-1):
+            ## Try minmod slope limiter
+            # L
+            tmp_slope = minmod( (dLx_dx[i] - dLx_dx[i-1])/dx, (dLx_dx[i+1] - dLx_dx[i])/dx)
+            dLx_dx_L[i] = dLx_dx[i] - tmp_slope*dx/2.
+            dLx_dx_R[i] = dLx_dx[i] + tmp_slope*dx/2.
+            tmp_slope = minmod( (dLy_dx[i] - dLy_dx[i-1])/dx, (dLy_dx[i+1] - dLy_dx[i])/dx)
+            dLy_dx_L[i] = dLy_dx[i] - tmp_slope*dx/2.
+            dLy_dx_R[i] = dLy_dx[i] + tmp_slope*dx/2.
+            tmp_slope = minmod( (dLx_dx[i] - dLx_dx[i-1])/dx, (dLz_dx[i+1] - dLz_dx[i])/dx)
+            dLz_dx_L[i] = dLz_dx[i] - tmp_slope*dx/2.
+            dLz_dx_R[i] = dLz_dx[i] + tmp_slope*dx/2.
+            # l
+            tmp_slope = minmod( (dlx_dx[i] - dlx_dx[i-1])/dx, (dlx_dx[i+1] - dlx_dx[i])/dx)
+            dlx_dx_L[i] = dlx_dx[i] - tmp_slope*dx/2.
+            dlx_dx_R[i] = dlx_dx[i] + tmp_slope*dx/2.
+            tmp_slope = minmod( (dly_dx[i] - dly_dx[i-1])/dx, (dly_dx[i+1] - dly_dx[i])/dx)
+            dly_dx_L[i] = dly_dx[i] - tmp_slope*dx/2.
+            dly_dx_R[i] = dly_dx[i] + tmp_slope*dx/2.
+            tmp_slope = minmod( (dlx_dx[i] - dlx_dx[i-1])/dx, (dlz_dx[i+1] - dlz_dx[i])/dx)
+            dlz_dx_L[i] = dlz_dx[i] - tmp_slope*dx/2.
+            dlz_dx_R[i] = dlz_dx[i] + tmp_slope*dx/2.
+            # Q
+            tmp_slope = minmod( (Q1[i] - Q1[i-1])/dx, (Q1[i+1] - Q1[i])/dx)
+            Q1_L[i] = Q1[i] - tmp_slope*dx/2.
+            Q1_R[i] = Q1[i] + tmp_slope*dx/2.
+            tmp_slope = minmod( (Q2[i] - Q2[i-1])/dx, (Q2[i+1] - Q2[i])/dx)
+            Q2_L[i] = Q2[i] - tmp_slope*dx/2.
+            Q2_R[i] = Q2[i] + tmp_slope*dx/2.
+            tmp_slope = minmod( (Q3[i] - Q3[i-1])/dx, (Q3[i+1] - Q3[i])/dx)
+            Q3_L[i] = Q3[i] - tmp_slope*dx/2.
+            Q3_R[i] = Q3[i] + tmp_slope*dx/2.
+            # psi
+            tmp_slope = minmod( (psi[i] - psi[i-1])/dx, (psi[i+1] - psi[i])/dx)
+            psi_L[i] = psi[i] - tmp_slope*dx/2.
+            psi_R[i] = psi[i] + tmp_slope*dx/2.
+            # dpsi_dx
+            tmp_slope = minmod( (dpsi_dx[i] - dpsi_dx[i-1])/dx, (dpsi_dx[i+1] - dpsi_dx[i])/dx)
+            dpsi_dx_L[i] = dpsi_dx[i] - tmp_slope*dx/2.
+            dpsi_dx_R[i] = dpsi_dx[i] + tmp_slope*dx/2.
+            # dQ1_dpsi
+            tmp_slope = minmod( (dQ1_dpsi[i] - dQ1_dpsi[i-1])/dx, (dQ1_dpsi[i+1] - dQ1_dpsi[i])/dx)
+            dQ1_dpsi_L[i] = dQ1_dpsi[i] - tmp_slope*dx/2.
+            dQ1_dpsi_R[i] = dQ1_dpsi[i] + tmp_slope*dx/2.
+
+
+
+            '''
             # Just average the cell-centered gradients to get their cell-interface values :)
             dLx_dx_L[i] = (dLx_dx[i] + dLx_dx[i-1])/2.
             dLx_dx_R[i] = (dLx_dx[i] + dLx_dx[i+1])/2. 
@@ -350,7 +411,7 @@ def evolve(*p):
             dpsi_dx_R[i] = (dpsi_dx[i] + dpsi_dx[i+1])/2.
             dQ1_dpsi_L[i] = (dQ1_dpsi[i] + dQ1_dpsi[i-1])/2.
             dQ1_dpsi_R[i] = (dQ1_dpsi[i] + dQ1_dpsi[i+1])/2.
-
+            '''
 
         ## reconstruct cell-interface primitive variables
 
@@ -459,6 +520,16 @@ def evolve(*p):
             vL = fmax(-Q1_R[i+1] + 2.*dpsi_dx_R[i+1]*dQ1_dpsi_R[i+1] + 2.*Q2_R[i+1]*psi_R[i+1], (1./L_R[i+1]**2.)*(L_R[i+1]**2.*(-1.*Q1_R[i+1] + 2.*dQ1_dpsi_R[i+1]*dpsi_dx_R[i+1] + 2.*Q2_R[i+1]*psi_R[i+1]**2.) + (Lx_R[i+1]*dLx_dx_R[i+1] + Ly_R[i+1]*dLy_dx_R[i+1] + Lz_R[i+1]*dLz_dx_R[i+1])*(2.*Q1_R[i+1] + Q2_R[i+1]))) 
             vR = fmax(-Q1_L[i+2] + 2.*dpsi_dx_L[i+2]*dQ1_dpsi_L[i+2] + 2.*Q2_L[i+2]*psi_L[i+2], (1./L_L[i+2]**2.)*(L_L[i+2]**2.*(-1.*Q1_L[i+2] + 2.*dQ1_dpsi_L[i+2]*dpsi_dx_L[i+2] + 2.*Q2_L[i+2]*psi_L[i+2]**2.) + (Lx_L[i+2]*dLx_dx_L[i+2] + Ly_L[i+2]*dLy_dx_L[i+2] + Lz_L[i+2]*dLz_dx_L[i+2])*(2.*Q1_L[i+2] + Q2_L[i+2]))) 
             sR = (HoR**2.)*fmax(vL,vR)
+
+            # Make corrections for velmax!
+            F_x_L[i] = F_x_L[i] * fmin(1.,  fabs(velmax*Lx_L[i]/F_x_L[i]))
+            F_x_R[i] = F_x_R[i] * fmin(1.,  fabs(velmax*Lx_R[i]/F_x_R[i]))
+            F_y_L[i] = F_y_L[i] * fmin(1.,  fabs(velmax*Ly_L[i]/F_y_L[i]))
+            F_y_R[i] = F_y_R[i] * fmin(1.,  fabs(velmax*Ly_R[i]/F_y_R[i]))
+            F_z_L[i] = F_z_L[i] * fmin(1.,  fabs(velmax*Lz_L[i]/F_z_L[i]))
+            F_z_R[i] = F_z_R[i] * fmin(1.,  fabs(velmax*Lz_R[i]/F_z_R[i]))
+            sL = fmax(sL,-velmax)
+            sR = fmin(sR,velmax)
             
             # Equations 9.82-9.91 of dongwook ams notes
             if (sL >= 0.):
@@ -482,9 +553,16 @@ def evolve(*p):
         for i in range(1,ngrid-1):
             vel = (HoR**2.)*fmax(fabs(-Q1[i] + 2.*dpsi_dx[i]*dQ1_dpsi[i] + 2.*Q2[i]*psi[i]), fabs((1./L[i]**2.)*(L[i]**2.*(-1.*Q1[i] + 2.*dQ1_dpsi[i]*dpsi_dx[i] + 2.*Q2[i]*psi[i]**2.) + (Lx[i]*dLx_dx[i] + Ly[i]*dLy_dx[i] + Lz[i]*dLz_dx[i])*(2.*Q1[i] + Q2[i])))) 
             nu  = (HoR**2.)*(Q1[i]**2. + Q2[i]**2. + Q3[i]**2.)**(0.5)
+            vel = fmin(vel,velmax)
+            #if (fabs(vel) > velmax):
+            #    printf("i = %d, r[i] = %e: vel = %e, velmax = %e, HoR*HoR*Q1 = %e\n",i,r[i],vel,velmax,-1.*(HoR**2.)*Q1[i])
+
             ## Q2 = 0, Q3 = 0
             #vel = fabs(HoR**2. * (-1.) * Q1[i])
             #nu  = fabs(2. * Q1[i] * HoR**2.)
+            #vel = fmin(vel, HoR*r[i]**(-2.))
+            #if (fabs(cfl*(dx/vel/(1. + 2.*nu/(vel*dx)))) < dt):
+            #    printf("i = %d: vel = %e, r = %e ,psi = %e, dpsi_dx = %e, dQ1_dpsi = %e, nu = %e, Q2 = %e, 1/L[i] = %e\n",i,vel,r[i],psi[i],dpsi_dx[i],dQ1_dpsi[i],nu,Q2[i],1./L[i])
             dt = fmin(dt,fabs(cfl*(dx/vel/(1. + 2.*nu/(vel*dx)))))
 
 
@@ -498,9 +576,7 @@ def evolve(*p):
             Lx[i] = Lx[i] - (dt/dx)*(F_x[i-1] - F_x[i-2])
             Ly[i] = Ly[i] - (dt/dx)*(F_y[i-1] - F_y[i-2])
             Lz[i] = Lz[i] - (dt/dx)*(F_z[i-1] - F_z[i-2])
-            #Lx[i] = fmax(Lx[i] - (dt/dx)*(F_x[i-1] - F_x[i-2]),small)
-            #Ly[i] = fmax(Ly[i] - (dt/dx)*(F_y[i-1] - F_y[i-2]),small)
-            #Lz[i] = fmax(Lz[i] - (dt/dx)*(F_z[i-1] - F_z[i-2]),small)
+
             L[i]  = (Lx[i]**2. + Ly[i]**2. + Lz[i]**2.)**0.5
             lx[i] = Lx[i]/L[i]
             ly[i] = Ly[i]/L[i]

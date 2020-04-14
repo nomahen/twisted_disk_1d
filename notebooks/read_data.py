@@ -53,7 +53,7 @@ def build_data(prefix, ngrid,order=3,convert=True):
         rmin = np.min(master_data[:,:,3])
         rmax = np.max(master_data[:,:,3])
         tmin = 0.
-        tmax = np.max(master_data[:,:,7])/rmax**(1.5)
+        tmax = np.max(master_data[:,:,7])*rmax**(1.5)
         rspace = np.linspace(rmin,rmax,ngrid)
         tspace = np.linspace(tmin,tmax,tgrid)
         tau = master_data[0,:,7]
@@ -61,7 +61,7 @@ def build_data(prefix, ngrid,order=3,convert=True):
         R, T = np.meshgrid(rspace,tspace,indexing='ij')
 
 
-        new_tau = T * R**(1.5)
+        new_tau = T / R**(1.5)
 
         it = interp1d(tau, np.arange(len(tau)), bounds_error=False)
         ir = interp1d(rspace, np.arange(ngrid), bounds_error=False)
