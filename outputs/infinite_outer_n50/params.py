@@ -1,22 +1,22 @@
 ### Set parameters for evolve.py here. ###
 
 ## Physics parameters
-alpha    = 0.5      # alpha viscosity [HoR < alpha < 1]
+alpha    = 0.2      # alpha viscosity [HoR < alpha < 1]
 gamma    = 1.0      # adiabatic index [1. < gamma < 5./3.]
-HoR      = 0.02    # disk scale height [HoR < alpha < 1]
+HoR      = 1e-3    # disk scale height [HoR < alpha < 1]
 tilt     = 45.      # initial disk tilt [degrees; 0 < tilt < 90]
-bhspin   = 1.    # black hole spin [0 < bhspin < 1]
+bhspin   = 0.1    # black hole spin [0 < bhspin < 1]
 r0       = 500.     # midpoint of density distribution [r_g; rmin < r0 < rmax]
 rw       = 60.     # Gaussian width of density distribution [r_g; rw > 0]
-rmin     = 6.0     # Inner radius of disk [r_g]
-rmax     = 100.0  # Outer radius of disk [r_g]
+rmin     = 60.0     # Inner radius of disk [r_g]
+rmax     = 1000.0  # Outer radius of disk [r_g]
 rho_type = "flat"  # Type of density distribution ["gauss" or "flat"]
 
 # Numerical parameters
 tmax    = 0.1    # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
 cfl     = 0.1    # Courant-Friedrichs-Lewy number
 ngrid   = 100     # num grid points
-bc      = "mix"  # boundary condition ["sink" or "outflow" or "mix" or "infinite"]
+bc      = "infinite"  # boundary condition ["sink" or "outflow" or "mix" or "infinite"]
 
 # Output
 io_freq   = 100              # how many number of steps to plot at
@@ -25,9 +25,9 @@ io_prefix = "./outputs/evolve_rmin60_rad_" # prefix for output files
 # Q1, Q2, Q3
 Q_dim = "1d" # Dimension of Q tables ["1d" or "2d"]
 smax   = 10. # Max psi value from Q table. Min is always 0. 
-Q1_path = "./tables/Q1_1d_a0.5_p0.0_g1.0_np30_ng10000.txt" 
-Q2_path = "./tables/Q2_1d_a0.5_p0.0_g1.0_np30_ng10000.txt"
-Q3_path = "./tables/Q3_1d_a0.5_p0.0_g1.0_np30_ng10000.txt"
+Q1_path = "./tables/Q1_1d_a0.2_p0.0_g1.0_np50_ng10000.txt" 
+Q2_path = "./tables/Q2_1d_a0.2_p0.0_g1.0_np50_ng10000.txt"
+Q3_path = "./tables/Q3_1d_a0.2_p0.0_g1.0_np50_ng10000.txt"
 
 #### package all params to send to evolve
 import time

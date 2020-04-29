@@ -9,7 +9,7 @@ cimport numpy as np
 cimport cython
 from libc.stdio cimport printf,fopen,fclose,fprintf,FILE,sprintf
 from libc.stdlib cimport malloc
-from libc.math cimport fmin, fmax, fabs, isnan
+from libc.math cimport fmin, fmax, fabs, isnan, sin, cos
 
  
 cdef double mycreal(double complex dc):
@@ -117,10 +117,11 @@ def evolve(*p):
     # build angular momentum quantities
     # Here we are using Lambda = I * Omega * r**2., where I = (h/r)^2 * Sigma * r^2 (assuming gamma = 1)
     lda_mag = (HoR)**2. * _sigma * omega**2. * _r**4.
-    lda_unit = np.array([np.array([np.sin(tilt),0.0,np.cos(tilt)])]*ngrid) # each annulus oriented in the same direction initially
+    prec = 0.0
+    lda_unit = np.array([np.array([np.sin(tilt)*np.cos(prec),np.sin(tilt)*np.sin(prec),np.cos(tilt)])]*ngrid) # each annulus oriented in the same direction initially
     _lda_vec  = np.copy(lda_unit) # building [Lambda_x,Lambda_y,Lambda_z] for each radial grid element
     if (1): # flatten inner region
-        tilt_factor = 0.
+        tilt_factor = 1.
         _lda_vec[_r < r0,0] *= np.sin(tilt_factor*tilt)/np.sin(tilt)
         _lda_vec[_r < r0,2] *= np.cos(tilt_factor*tilt)/np.cos(tilt)
     for j in range(3): _lda_vec[:,j] *= lda_mag
@@ -129,11 +130,11 @@ def evolve(*p):
     # for Lense-Thirring source term
     _omega_p = np.zeros(3*ngrid)
     _omega_p = np.reshape(_omega_p, (ngrid,3))
-    _omega_p[:,2] = 2.0 * bhspin / _r**3.0 # x/y components are zero, z component is LT precession frequency
+    _omega_p[:,2] = 2.0 * bhspin / _r**(1.5)# in tau coordinates _r**3.0 # x/y components are zero, z component is LT precession frequency
  
     # calculate (approximate) viscous time (t_visc = r0**2./nu1(psi=0))
     nu_ref    = (-2.0/3.0)*(-1.0*10**(interp_1d(_s_arr,np.log10(-Q1_parsed + 1e-30),0,ng_Q)))*((HoR**2.0)*r0**0.5)
-    t_viscous = r0**(0.5)/nu_ref
+    t_viscous = r0**2/nu_ref / rmin**(1.5) # tau units
     #t_viscous = r0**(7./2.)/nu_ref#r0*r0/nu_ref
     #nu_ref = -1.0*(-1.0*10**(interp_1d(_s_arr,np.log10(-Q1_parsed + 1e-30),0,ng_Q))) * HoR**2.
     #t_viscous  = 0.5*np.log(r0)**2. / nu_ref
@@ -149,8 +150,10 @@ def evolve(*p):
         bc_type = 1
     elif (bc == 'mix'):
         bc_type = 2
+    elif (bc == 'infinite'):
+        bc_type = 3
     else:
-        print "Error! bc needs to be set to \"sink\", \"outflow\" or \"mix\"! Exiting"
+        print "Error! bc needs to be set to \"sink\", \"outflow\", \"mix\" or \"infinite\"! Exiting"
         exit()
  
  
@@ -203,7 +206,7 @@ def evolve(*p):
     cdef double[:] lx = _lda_vec[:,0]/np.sqrt(_lda_vec[:,0]**2.0 + _lda_vec[:,1]**2.0 + _lda_vec[:,2]**2.0)
     cdef double[:] ly = _lda_vec[:,1]/np.sqrt(_lda_vec[:,0]**2.0 + _lda_vec[:,1]**2.0 + _lda_vec[:,2]**2.0)
     cdef double[:] lz = _lda_vec[:,2]/np.sqrt(_lda_vec[:,0]**2.0 + _lda_vec[:,1]**2.0 + _lda_vec[:,2]**2.0)
-    cdef double[:] omega_p_z = np.copy(_omega_p[:,2])
+    cdef double[:] omega_p_z = np.copy(_omega_p[:,2]) #* _r**(1.5) # convert to per tau units
 
     # Primitive variables
     cdef double[:] Lx_L      = np.zeros(ngrid)
@@ -267,17 +270,21 @@ def evolve(*p):
     cdef double[:] F_z_R     = np.zeros(ngrid-3)
 
     # miscellaneous variables
+    cdef double Lx_tmp, Ly_tmp
     cdef double small = 1e-30
     cdef double[:] Q1_arr = np.log10(-Q1_parsed + small)
     cdef double[:] Q2_arr = np.log10(Q2_parsed + small)
-    cdef double[:] Q3_arr = np.log10(Q3_parsed + small)
-    cdef double[:] dQ1_dpsi_arr = np.log10(dQ1_dpsi_parsed + small)
+    cdef double[:] Q3_arr = Q3_parsed#np.log10(Q3_parsed + small)
+    cdef double[:] dQ1_dpsi_arr = dQ1_dpsi_parsed#np.log10(dQ1_dpsi_parsed + small)
     cdef double[:] s_arr = _s_arr
     cdef double dt = 1000000000000000000.
     cdef double tmp_slope # for data reconstruction
     cdef double aL,aR,vL,vR,sL,sR,vel,nu
     cdef double velmax  = 0.5*HoR # 1/2 sound speed in code units
     cdef int i
+    cdef double[:] Lx_inf = _lda_vec[ngrid-2:ngrid,0]
+    cdef double[:] Ly_inf = _lda_vec[ngrid-2:ngrid,1]
+    cdef double[:] Lz_inf = _lda_vec[ngrid-2:ngrid,2]
 
     # io variables
     cdef FILE      *f_out
@@ -287,12 +294,14 @@ def evolve(*p):
     for i in range(ngrid):
         sprintf(io_fn,"%s%d.csv",io_prefix,i)
         f_out = fopen(io_fn,"w")
+
+    #for i in range(len(dQ1_dpsi_parsed)):
+    #    print "pre while: ", np.log10(dQ1_dpsi_parsed + small)[i], dQ1_dpsi_parsed[i]
     
     # iterate!
     t = 0.
     while (t < tmax):
-
-        if (nstep == -1): exit()
+        #if (nstep == 1): exit()
  
         if (( (t/tmax)%(1e-5) < dt)):
             printf("t/tmax = %e, dt/tmax = %e\n",t/tmax,dt/tmax)
@@ -330,8 +339,8 @@ def evolve(*p):
             psi[i]      = (dlx_dx[i]**2. + dly_dx[i]**2. + dlz_dx[i]**2.)**0.5
             Q1[i]       = -1.0*(10**(interp_1d(s_arr,Q1_arr,psi[i],ng_Q)))
             Q2[i]       = 10**(interp_1d(s_arr,Q2_arr,psi[i],ng_Q))
-            Q3[i]       = 10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))
-            dQ1_dpsi[i] = 10**(interp_1d(s_arr,dQ1_dpsi_arr,psi[i],ng_Q))
+            Q3[i]       = interp_1d(s_arr,Q3_arr,psi[i],ng_Q)#10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))
+            dQ1_dpsi[i] = interp_1d(s_arr,dQ1_dpsi_arr,psi[i],ng_Q)#10**(interp_1d(s_arr,dQ1_dpsi_arr,psi[i],ng_Q))
             dpsi_dx[i] = (0.5/dx) * (psi[i+1] - psi[i-1])
 
 
@@ -347,7 +356,7 @@ def evolve(*p):
             tmp_slope = minmod( (dLy_dx[i] - dLy_dx[i-1])/dx, (dLy_dx[i+1] - dLy_dx[i])/dx)
             dLy_dx_L[i] = dLy_dx[i] - tmp_slope*dx/2.
             dLy_dx_R[i] = dLy_dx[i] + tmp_slope*dx/2.
-            tmp_slope = minmod( (dLx_dx[i] - dLx_dx[i-1])/dx, (dLz_dx[i+1] - dLz_dx[i])/dx)
+            tmp_slope = minmod( (dLz_dx[i] - dLz_dx[i-1])/dx, (dLz_dx[i+1] - dLz_dx[i])/dx)
             dLz_dx_L[i] = dLz_dx[i] - tmp_slope*dx/2.
             dLz_dx_R[i] = dLz_dx[i] + tmp_slope*dx/2.
             # l
@@ -357,7 +366,7 @@ def evolve(*p):
             tmp_slope = minmod( (dly_dx[i] - dly_dx[i-1])/dx, (dly_dx[i+1] - dly_dx[i])/dx)
             dly_dx_L[i] = dly_dx[i] - tmp_slope*dx/2.
             dly_dx_R[i] = dly_dx[i] + tmp_slope*dx/2.
-            tmp_slope = minmod( (dlx_dx[i] - dlx_dx[i-1])/dx, (dlz_dx[i+1] - dlz_dx[i])/dx)
+            tmp_slope = minmod( (dlz_dx[i] - dlz_dx[i-1])/dx, (dlz_dx[i+1] - dlz_dx[i])/dx)
             dlz_dx_L[i] = dlz_dx[i] - tmp_slope*dx/2.
             dlz_dx_R[i] = dlz_dx[i] + tmp_slope*dx/2.
             # Q
@@ -505,10 +514,15 @@ def evolve(*p):
             F_y_R[i] += (HoR**2.) * (-1. * Q3_L[i+2]) * (Lz_L[i+2]*dLx_dx_L[i+2] - Lx_L[i+2]*dLz_dx_L[i+2]) 
             F_z_R[i] += (HoR**2.) * (-1. * Q3_L[i+2]) * (Lx_L[i+2]*dLy_dx_L[i+2] - Ly_L[i+2]*dLx_dx_L[i+2]) 
 
+            '''printf("F_x_R[i] = %e, F_x_L[i] = %e\n",F_x_R[i],F_x_L[i])
+            printf("F_y_R[i] = %e, F_y_L[i] = %e\n",F_y_R[i],F_y_L[i])
+            printf("F_z_R[i] = %e, F_z_L[i] = %e\n",F_z_R[i],F_z_L[i])
+            printf("Q1_R[i] = %e, Q1_L[I] = %e\n",Q1_R[i],Q1_L[i])
+            printf("Q2_R[i] = %e, Q2_L[I] = %e\n",Q2_R[i],Q2_L[i])
+            printf("Q3_R[i] = %e, Q3_L[I] = %e\n",Q3_R[i],Q3_L[i])
+            printf("dQ1_dpsi_R[i] = %e, dQ1_dpsi_L[I] = %e, dQ1_dpsi[i] = %e\n",dQ1_dpsi_R[i],dQ1_dpsi_L[i],dQ1_dpsi[i])
+            '''
             ## Calculate wave velocities
-            # Need a way to estimate wave velocity for system; adding fluxes is the simplest estimate
-            #vL = (HoR**2.) * (-1.) * Q1_R[i+1] 
-            #vR = (HoR**2.) * (-1.) * Q1_L[i+2]
 
             # Get minimum signal speed by taking minimum eigen values at left and right faces, and then the minimum of those
             vL = fmin(-Q1_R[i+1] + 2.*dpsi_dx_R[i+1]*dQ1_dpsi_R[i+1] + 2.*Q2_R[i+1]*psi_R[i+1], (1./L_R[i+1]**2.)*(L_R[i+1]**2.*(-1.*Q1_R[i+1] + 2.*dQ1_dpsi_R[i+1]*dpsi_dx_R[i+1] + 2.*Q2_R[i+1]*psi_R[i+1]**2.) + (Lx_R[i+1]*dLx_dx_R[i+1] + Ly_R[i+1]*dLy_dx_R[i+1] + Lz_R[i+1]*dLz_dx_R[i+1])*(2.*Q1_R[i+1] + Q2_R[i+1]))) 
@@ -522,12 +536,12 @@ def evolve(*p):
             sR = (HoR**2.)*fmax(vL,vR)
 
             # Make corrections for velmax!
-            F_x_L[i] = F_x_L[i] * fmin(1.,  fabs(velmax*Lx_L[i]/F_x_L[i]))
-            F_x_R[i] = F_x_R[i] * fmin(1.,  fabs(velmax*Lx_R[i]/F_x_R[i]))
-            F_y_L[i] = F_y_L[i] * fmin(1.,  fabs(velmax*Ly_L[i]/F_y_L[i]))
-            F_y_R[i] = F_y_R[i] * fmin(1.,  fabs(velmax*Ly_R[i]/F_y_R[i]))
-            F_z_L[i] = F_z_L[i] * fmin(1.,  fabs(velmax*Lz_L[i]/F_z_L[i]))
-            F_z_R[i] = F_z_R[i] * fmin(1.,  fabs(velmax*Lz_R[i]/F_z_R[i]))
+            #F_x_L[i] = F_x_L[i] * fmin(1.,  fabs(velmax*Lx_L[i]/F_x_L[i]))
+            #F_x_R[i] = F_x_R[i] * fmin(1.,  fabs(velmax*Lx_R[i]/F_x_R[i]))
+            #F_y_L[i] = F_y_L[i] * fmin(1.,  fabs(velmax*Ly_L[i]/F_y_L[i]))
+            #F_y_R[i] = F_y_R[i] * fmin(1.,  fabs(velmax*Ly_R[i]/F_y_R[i]))
+            #F_z_L[i] = F_z_L[i] * fmin(1.,  fabs(velmax*Lz_L[i]/F_z_L[i]))
+            #F_z_R[i] = F_z_R[i] * fmin(1.,  fabs(velmax*Lz_R[i]/F_z_R[i]))
             sL = fmax(sL,-velmax)
             sR = fmin(sR,velmax)
             
@@ -576,6 +590,14 @@ def evolve(*p):
             Lx[i] = Lx[i] - (dt/dx)*(F_x[i-1] - F_x[i-2])
             Ly[i] = Ly[i] - (dt/dx)*(F_y[i-1] - F_y[i-2])
             Lz[i] = Lz[i] - (dt/dx)*(F_z[i-1] - F_z[i-2])
+
+        for i in range(ngrid):
+            ## Update external torques
+            Lx_tmp = Lx[i]*cos(omega_p_z[i]*dt) - Ly[i]*sin(omega_p_z[i]*dt)
+            Ly_tmp = Lx[i]*sin(omega_p_z[i]*dt) + Ly[i]*cos(omega_p_z[i]*dt)
+            Lx[i] = 1.0*Lx_tmp
+            Ly[i] = 1.0*Ly_tmp
+
 
             L[i]  = (Lx[i]**2. + Ly[i]**2. + Lz[i]**2.)**0.5
             lx[i] = Lx[i]/L[i]
@@ -635,6 +657,23 @@ def evolve(*p):
             Lz[1] = Lz[2]*(r[2]/r[1])**(-1.)
             Lz[ngrid-1] = Lz[ngrid-3]*(r[ngrid-3]/r[ngrid-1])**(-1.)
             Lz[ngrid-2] = Lz[ngrid-3]*(r[ngrid-3]/r[ngrid-2])**(-1.)
+
+        elif (bc_type==3): #### Infinite disk
+            ## Lx
+            Lx[0] = Lx[2]*(r[2]/r[0])**(-1.)
+            Lx[1] = Lx[2]*(r[2]/r[1])**(-1.)
+            Lx[ngrid-1] = Lx_inf[1] 
+            Lx[ngrid-2] = Lx_inf[0]
+            ## Ly
+            Ly[0] = Ly[2]*(r[2]/r[0])**(-1.)
+            Ly[1] = Ly[2]*(r[2]/r[1])**(-1.)
+            Ly[ngrid-1] = Ly_inf[1]
+            Ly[ngrid-2] = Ly_inf[0]
+            ## Lz
+            Lz[0] = Lz[2]*(r[2]/r[0])**(-1.)
+            Lz[1] = Lz[2]*(r[2]/r[1])**(-1.)
+            Lz[ngrid-1] = Lz_inf[1]
+            Lz[ngrid-2] = Lz_inf[0]
 
         #### Update timestep
         t += dt
