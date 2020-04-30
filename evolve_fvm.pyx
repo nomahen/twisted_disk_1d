@@ -392,38 +392,42 @@ def evolve(*p):
             dQ1_dpsi_L[i] = dQ1_dpsi[i] - tmp_slope*dx/2.
             dQ1_dpsi_R[i] = dQ1_dpsi[i] + tmp_slope*dx/2.
 
+            # Lx
+            tmp_slope = minmod( (Lx[i] - Lx[i-1])/dx, (Lx[i+1] - Lx[i])/dx)
+            Lx_L[i] = Lx[i] - tmp_slope*dx/2.
+            Lx_R[i] = Lx[i] + tmp_slope*dx/2.
+            # Ly
+            tmp_slope = minmod( (Ly[i] - Ly[i-1])/dx, (Ly[i+1] - Ly[i])/dx)
+            Ly_L[i] = Ly[i] - tmp_slope*dx/2.
+            Ly_R[i] = Ly[i] + tmp_slope*dx/2.
+            # Lz
+            tmp_slope = minmod( (Lz[i] - Lz[i-1])/dx, (Lz[i+1] - Lz[i])/dx)
+            Lz_L[i] = Lz[i] - tmp_slope*dx/2.
+            Lz_R[i] = Lz[i] + tmp_slope*dx/2.
+            # Calcualte full L from these quantities
+            L_L[i]  = (Lx_L[i]**2. + Ly_L[i]**2. + Lz_L[i]**2.)**0.5
+            L_R[i]  = (Lx_R[i]**2. + Ly_R[i]**2. + Lz_R[i]**2.)**0.5
 
-
-            '''
-            # Just average the cell-centered gradients to get their cell-interface values :)
-            dLx_dx_L[i] = (dLx_dx[i] + dLx_dx[i-1])/2.
-            dLx_dx_R[i] = (dLx_dx[i] + dLx_dx[i+1])/2. 
-            dLy_dx_L[i] = (dLy_dx[i] + dLy_dx[i-1])/2. 
-            dLy_dx_R[i] = (dLy_dx[i] + dLy_dx[i+1])/2. 
-            dLz_dx_L[i] = (dLz_dx[i] + dLz_dx[i-1])/2. 
-            dLz_dx_R[i] = (dLz_dx[i] + dLz_dx[i+1])/2. 
-            dlx_dx_L[i] = (dlx_dx[i] + dlx_dx[i-1])/2.
-            dlx_dx_R[i] = (dlx_dx[i] + dlx_dx[i+1])/2. 
-            dly_dx_L[i] = (dly_dx[i] + dly_dx[i-1])/2. 
-            dly_dx_R[i] = (dly_dx[i] + dly_dx[i+1])/2. 
-            dlz_dx_L[i] = (dlz_dx[i] + dlz_dx[i-1])/2. 
-            dlz_dx_R[i] = (dlz_dx[i] + dlz_dx[i+1])/2. 
-            Q1_L[i] = (Q1[i] + Q1[i-1])/2.
-            Q1_R[i] = (Q1[i] + Q1[i+1])/2.
-            Q2_L[i] = (Q2[i] + Q2[i-1])/2.
-            Q2_R[i] = (Q2[i] + Q2[i+1])/2.
-            Q3_L[i] = (Q3[i] + Q3[i-1])/2.
-            Q3_R[i] = (Q3[i] + Q3[i+1])/2.
-            psi_L[i] = (psi[i] + psi[i-1])/2.
-            psi_R[i] = (psi[i] + psi[i+1])/2.
-            dpsi_dx_L[i] = (dpsi_dx[i] + dpsi_dx[i-1])/2.
-            dpsi_dx_R[i] = (dpsi_dx[i] + dpsi_dx[i+1])/2.
-            dQ1_dpsi_L[i] = (dQ1_dpsi[i] + dQ1_dpsi[i-1])/2.
-            dQ1_dpsi_R[i] = (dQ1_dpsi[i] + dQ1_dpsi[i+1])/2.
-            '''
+        # for PLM, lets fill guard cells
+        Lx_L[0] = Lx_L[1]
+        Lx_R[0] = Lx_R[1]
+        Lx_L[ngrid] = Lx_L[ngrid-1]
+        Lx_R[ngrid] = Lx_R[ngrid-1]
+        Ly_L[0] = Ly_L[1]
+        Ly_R[0] = Ly_R[1]
+        Ly_L[ngrid] = Ly_L[ngrid-1]
+        Ly_R[ngrid] = Ly_R[ngrid-1]
+        Lz_L[0] = Lz_L[1]
+        Lz_R[0] = Lz_R[1]
+        Lz_L[ngrid] = Lz_L[ngrid-1]
+        Lz_R[ngrid] = Lz_R[ngrid-1]
+        L_L[0]  = (Lx_L[1]**2. + Ly_L[1]**2. + Lz_L[1]**2.)**0.5
+        L_R[0]  = (Lx_R[1]**2. + Ly_R[1]**2. + Lz_R[1]**2.)**0.5
+        L_L[ngrid]  = (Lx_L[ngrid-1]**2. + Ly_L[ngrid-1]**2. + Lz_L[ngrid-1]**2.)**0.5
+        L_R[ngrid]  = (Lx_R[ngrid-1]**2. + Ly_R[ngrid-1]**2. + Lz_R[ngrid-1]**2.)**0.5
 
         ## reconstruct cell-interface primitive variables
-
+        '''
         for i in range(ngrid):
             # first order godunov
             Lx_L[i] = Lx[i]
@@ -434,7 +438,7 @@ def evolve(*p):
             Lz_R[i] = Lz[i]
             L_L[i]  = (Lx_L[i]**2. + Ly_L[i]**2. + Lz_L[i]**2.)**0.5
             L_R[i]  = (Lx_R[i]**2. + Ly_R[i]**2. + Lz_R[i]**2.)**0.5
-
+        '''
         ## evolve (get fluxes)
 
         # hll

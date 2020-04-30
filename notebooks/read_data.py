@@ -114,6 +114,11 @@ def build_data(prefix,ngrid,tgrid,data_ngrid,order=3,convert=True,HoR=1e-3):
 
     # precession angle
     prec = np.arctan2(ly,lx)*180.0/np.pi
+    # makes precession angle cumulative
+    for tt in range(tgrid):
+        for nn in np.flip(range(0,ngrid-1)):
+            prec[nn,tt] = prec[nn+1,tt] + ((prec[nn,tt] - prec[nn+1,tt]) % 180.)
+    
 
     # surface density
     sigma = L/r/HoR**2.
@@ -140,6 +145,12 @@ def build_data(prefix,ngrid,tgrid,data_ngrid,order=3,convert=True,HoR=1e-3):
     dpdt[:,1:] = (prec[:,1:] - prec[:,:-1])
     dpdt[:,0] = dpdt[:,1]
     dpdt = dpdt/dt
+
+    # dpdr
+    rdpdr = np.zeros(np.shape(r))
+    rdpdr[1:,:] = (prec[1:,:] - prec[:-1,:])/dr[1:,:]
+    rdpdr[0,:] = rdpdr[1,:]
+    rdpdr = r*rdpdr
 
     # warp amplitude
     psi = np.zeros(np.shape(r))
@@ -174,17 +185,14 @@ def build_data(prefix,ngrid,tgrid,data_ngrid,order=3,convert=True,HoR=1e-3):
     dQ2dpsi[1:,:] = Q2[1:,:] - Q2[:-1,:]
     dQ2dpsi[0,:] = dQ2dpsi[1,:]
     dQ2dpsi = dQ2dpsi/psi
-    # dogan1 is Equation (40) of Dogan 2018
-    dogan1 = a*dQ1dpsi - dQ2dpsi 
-    # dogan2 is the second: expression in Equation (41) of Dogan 2018
-    dogan2 = 4*a*(Q1*Q2 + (Q1*dQ2dr - dQ1dr*Q2)*psi)
-    # The disk is locally unstable if: dogan1 > 0 or if dogan1 < 0 and dogan2 > 0
+    # s+ is from Equation (32) of Dogan 2018. Neglecting s+ form with Q3  because it is negligibly different and complicates the equation (which is Eq 33). Should add it later.
+    s = np.real(0.5*(a*(Q1 + dQ1dr*psi) - (Q2 + dQ2dr*psi) + np.sqrt(0.j + (a*(Q1 + dQ1dr*psi) - (Q2 + dQ2dr*psi))**2. + 4*a*(Q1*Q2 + (Q1*dQ2dr - dQ1dr*Q2)*psi))))
     ##
 
 
     ## Compile tables
-    table_list   = [r,t,Lx,Ly,Lz,Q1,Q2,Q3,L,lx,ly,lz,tilt,prec,sigma,R,T,dt,dr,mdot,vr,dpdt,psi,dogan1,dogan2]
-    table_titles = ["r","t","Lx","Ly","Lz","Q1","Q2","Q3","L","lx","ly","lz","tilt","prec","sigma","R","T","dt","dr","mdot","vr","dpdt","psi","dogan1","dogan2"]
+    table_list   = [r,t,Lx,Ly,Lz,Q1,Q2,Q3,L,lx,ly,lz,tilt,prec,sigma,R,T,dt,dr,mdot,vr,dpdt,rdpdr,psi,s]
+    table_titles = ["r","t","Lx","Ly","Lz","Q1","Q2","Q3","L","lx","ly","lz","tilt","prec","sigma","R","T","dt","dr","mdot","vr","dpdt","rdpdr","psi","s"]
     return QTable(data=table_list,names=table_titles)
 
 def get_fn_list(path_to_outputs,first,last):

@@ -99,10 +99,6 @@ def f_appx(a,r,s,g,p):
     f42 = Ct2*np.cos(2*x) + St2*np.sin(2*x)
     f62 = St2*np.cos(2*x) - Ct2*np.sin(2*x)
     
-    ## Skip 3rd order for now
-    #f33 = 
-    #r53 = 
-    
     ## Calculate
     f1 = f10 + s*s*f12
     f2 = f20 + s*s*f22
@@ -142,8 +138,7 @@ def objective(ic,x,a,r,s,g,p):
     
     # Minimizing derivative of f forces both f and f' to be continuous. We do compare first and last elements because
     # each function is periodic. 
-    condition = [df1_dxb-df1_dxa, df2_dxb-df2_dxa, df3_dxb-df3_dxa, df4_dxb-df4_dxa, df5_dxb-df5_dxa, df6_dxb-df6_dxa] 
-    
+    condition = [df1_dxb-df1_dxa, df2_dxb-df2_dxa, df3_dxb-df3_dxa, df4_dxb-df4_dxa, df5_dxb-df5_dxa, df6_dxb-df6_dxa]  
 
     return condition
 
