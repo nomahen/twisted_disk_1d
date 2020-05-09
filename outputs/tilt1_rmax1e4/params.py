@@ -4,7 +4,7 @@
 alpha    = 0.2      # alpha viscosity [HoR < alpha < 1]
 gamma    = 1.0      # adiabatic index [1. < gamma < 5./3.]
 HoR      = 1e-3     # disk scale height [HoR < alpha < 1]
-tilt     = 45.      # initial disk tilt [degrees; 0 < tilt < 90]
+tilt     = 1.       # initial disk tilt [degrees; 0 < tilt < 90]
 bhspin   = 1.      # black hole spin [0 < bhspin < 1]
 r0       = 100.     # midpoint of density distribution [r_g; rmin < r0 < rmax]
 rw       = 60.      # Gaussian width of density distribution [r_g; rw > 0]
@@ -15,12 +15,12 @@ rho_type = "flat"   # Type of density distribution ["gauss" or "flat"]
 # Numerical parameters
 tmax    = 0.1   # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
 cfl     = 0.1   # Courant-Friedrichs-Lewy number
-ngrid   = 800    # num grid points
+ngrid   = 50    # num grid points
 bc      = "infinite"  # boundary condition ["sink" or "outflow" or "mix" or "infinite"]
 
 # Output
 io_freq   = 100             # how many number of steps to plot at
-io_prefix = "./outputs/tilt45_rmax1e4/n800/evolve_rmin60_rad_" # prefix for output files
+io_prefix = "./outputs/tilt1_rmax1e4/n50/evolve_rmin60_rad_" # prefix for output files
 
 # Q1, Q2, Q3
 Q_dim = "1d" # Dimension of Q tables ["1d" or "2d"]

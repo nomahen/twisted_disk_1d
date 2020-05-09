@@ -99,9 +99,13 @@ def build_data(prefix,ngrid,tgrid,data_ngrid,order=3,convert=True,HoR=1e-3):
         Q3 = master_data[:,:,6]
         t  = master_data[:,:,7] 
 
+
         # just so the rest of the code will work
+        tgrid = len(t[0,:])
+        ngrid = len(t[:,0])
         R = np.copy(r)
         T = np.copy(t)
+        
 
     # extra quantities that might be useful
     L = (Lx*Lx + Ly*Ly + Lz*Lz)**0.5

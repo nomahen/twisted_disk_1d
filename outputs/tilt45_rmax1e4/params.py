@@ -15,12 +15,12 @@ rho_type = "flat"   # Type of density distribution ["gauss" or "flat"]
 # Numerical parameters
 tmax    = 0.1   # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
 cfl     = 0.1   # Courant-Friedrichs-Lewy number
-ngrid   = 800    # num grid points
+ngrid   = 50    # num grid points
 bc      = "infinite"  # boundary condition ["sink" or "outflow" or "mix" or "infinite"]
 
 # Output
 io_freq   = 100             # how many number of steps to plot at
-io_prefix = "./outputs/tilt45_rmax1e4/n800/evolve_rmin60_rad_" # prefix for output files
+io_prefix = "./outputs/tilt45_rmax1e4/n50/evolve_rmin60_rad_" # prefix for output files
 
 # Q1, Q2, Q3
 Q_dim = "1d" # Dimension of Q tables ["1d" or "2d"]
