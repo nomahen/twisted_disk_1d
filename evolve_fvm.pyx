@@ -38,7 +38,7 @@ def load_Q(path,dim="1d"):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
-cdef double[:,:] flux_calc(double HoR, double velmax, double dt, int ngrid, double[:] Lx_L, double[:] Lx_R, double[:] Ly_L, double[:] Ly_R, double[:] Lz_L, double[:] Lz_R, double[:] L_L, double[:] L_R, double[:] dLx_dx_L, double[:] dLx_dx_R, double[:] dLy_dx_L, double[:] dLy_dx_R, double[:] dLz_dx_L, double[:] dLz_dx_R, double[:] dlx_dx_L, double[:] dlx_dx_R, double[:] dly_dx_L, double[:] dly_dx_R, double[:] dlz_dx_L, double[:] dlz_dx_R, double[:] psi_L, double[:] psi_R, double[:] Q1_L, double[:] Q1_R, double[:] Q2_L, double[:] Q2_R, double[:] Q3_L, double[:] Q3_R, double[:] dQ1_dpsi_L, double[:] dQ1_dpsi_R, double[:] dpsi_dx_L, double[:] dpsi_dx_R):
+cdef double[:,:] flux_calc(double HoR, double velmax, double dt, int ngrid, double[:] Lx_L, double[:] Lx_R, double[:] Ly_L, double[:] Ly_R, double[:] Lz_L, double[:] Lz_R, double[:] L_L, double[:] L_R, double[:] dLx_dx_L, double[:] dLx_dx_R, double[:] dLy_dx_L, double[:] dLy_dx_R, double[:] dLz_dx_L, double[:] dLz_dx_R, double[:] dlx_dx_L, double[:] dlx_dx_R, double[:] dly_dx_L, double[:] dly_dx_R, double[:] dlz_dx_L, double[:] dlz_dx_R, double[:] psi_L, double[:] psi_R, double[:] Q1_L, double[:] Q1_R, double[:] Q2_L, double[:] Q2_R, double[:] Q3_L, double[:] Q3_R, double[:] dQ1_dpsi_L, double[:] dQ1_dpsi_R, double[:] dpsi_dx_L, double[:] dpsi_dx_R, double[:] dQ1_dx_L, double[:] dQ1_dx_R):
         cdef double vL,vR,sL,sR
         cdef double small = 1e-30
         cdef int i
@@ -69,9 +69,9 @@ cdef double[:,:] flux_calc(double HoR, double velmax, double dt, int ngrid, doub
             F_z_L[i] += (HoR**2.) * (2. * Q1_R[i+1] * (Lz_R[i+1]/L_R[i+1]**2.))*(Lx_R[i+1]*dLx_dx_R[i+1] + Ly_R[i+1]*dLy_dx_R[i+1] + Lz_R[i+1]*dLz_dx_R[i+1]) 
 
             # (L) dQ1_dpsi term
-            F_x_L[i] += (HoR**2.) * (2. * dpsi_dx_R[i+1]*dQ1_dpsi_R[i+1]  * Lx_R[i+1])
-            F_y_L[i] += (HoR**2.) * (2. * dpsi_dx_R[i+1]*dQ1_dpsi_R[i+1]  * Ly_R[i+1])
-            F_z_L[i] += (HoR**2.) * (2. * dpsi_dx_R[i+1]*dQ1_dpsi_R[i+1]  * Lz_R[i+1])
+            F_x_L[i] += (HoR**2.) * (2. * dQ1_dx_R[i+1]  * Lx_R[i+1])
+            F_y_L[i] += (HoR**2.) * (2. * dQ1_dx_R[i+1]  * Ly_R[i+1])
+            F_z_L[i] += (HoR**2.) * (2. * dQ1_dx_R[i+1]  * Lz_R[i+1])
 
             # (L) Q2 advective term 1 (depends on L)
             F_x_L[i] += (HoR**2.) * (Q2_R[i+1]/L_R[i+1]**2.) * (Lx_R[i+1]*dLx_dx_R[i+1] + Ly_R[i+1]*dLy_dx_R[i+1] + Lz_R[i+1]*dLz_dx_R[i+1]) * Lx_R[i+1]
@@ -106,9 +106,9 @@ cdef double[:,:] flux_calc(double HoR, double velmax, double dt, int ngrid, doub
             F_z_R[i] += (HoR**2.) * (2. * Q1_L[i+2] * (Lz_L[i+2]/L_L[i+2]**2.))*(Lx_L[i+2]*dLx_dx_L[i+2] + Ly_L[i+2]*dLy_dx_L[i+2] + Lz_L[i+2]*dLz_dx_L[i+2]) 
 
             # (R) dQ1_dpsi term
-            F_x_R[i] += (HoR**2.) * (2. * dpsi_dx_L[i+2]*dQ1_dpsi_L[i+2]  * Lx_L[i+2])
-            F_y_R[i] += (HoR**2.) * (2. * dpsi_dx_L[i+2]*dQ1_dpsi_L[i+2]  * Ly_L[i+2])
-            F_z_R[i] += (HoR**2.) * (2. * dpsi_dx_L[i+2]*dQ1_dpsi_L[i+2]  * Lz_L[i+2])
+            F_x_R[i] += (HoR**2.) * (2. * dQ1_dx_L[i+2]  * Lx_L[i+2])
+            F_y_R[i] += (HoR**2.) * (2. * dQ1_dx_L[i+2]  * Ly_L[i+2])
+            F_z_R[i] += (HoR**2.) * (2. * dQ1_dx_L[i+2]  * Lz_L[i+2])
 
             # (R) Q2 advective term 1 (depends on magnitude of L)
             F_x_R[i] += (HoR**2.) * (Q2_L[i+2]/L_L[i+2]**2.) * (Lx_L[i+2]*dLx_dx_L[i+2] + Ly_L[i+2]*dLy_dx_L[i+2] + Lz_L[i+2]*dLz_dx_L[i+2]) * Lx_L[i+2]
@@ -133,14 +133,14 @@ cdef double[:,:] flux_calc(double HoR, double velmax, double dt, int ngrid, doub
             ## Calculate wave velocities
 
             # Get minimum signal speed by taking minimum eigen values at left and right faces, and then the minimum of those
-            vL = fmin(-Q1_R[i+1] + 2.*dpsi_dx_R[i+1]*dQ1_dpsi_R[i+1] - 2.*Q2_R[i+1]*psi_R[i+1]**2., (1./L_R[i+1]**2.)*(L_R[i+1]**2.*(-1.*Q1_R[i+1] + 2.*dQ1_dpsi_R[i+1]*dpsi_dx_R[i+1] - 2.*Q2_R[i+1]*psi_R[i+1]**2.) + (Lx_R[i+1]*dLx_dx_R[i+1] + Ly_R[i+1]*dLy_dx_R[i+1] + Lz_R[i+1]*dLz_dx_R[i+1])*(2.*Q1_R[i+1] + Q2_R[i+1]))) 
-            vR = fmin(-Q1_L[i+2] + 2.*dpsi_dx_L[i+2]*dQ1_dpsi_L[i+2] - 2.*Q2_L[i+2]*psi_L[i+2]**2., (1./L_L[i+2]**2.)*(L_L[i+2]**2.*(-1.*Q1_L[i+2] + 2.*dQ1_dpsi_L[i+2]*dpsi_dx_L[i+2] - 2.*Q2_L[i+2]*psi_L[i+2]**2.) + (Lx_L[i+2]*dLx_dx_L[i+2] + Ly_L[i+2]*dLy_dx_L[i+2] + Lz_L[i+2]*dLz_dx_L[i+2])*(2.*Q1_L[i+2] + Q2_L[i+2]))) 
+            vL = fmin(-Q1_R[i+1] + 2.*dQ1_dx_R[i+1] - 2.*Q2_R[i+1]*psi_R[i+1]**2., (1./L_R[i+1]**2.)*(L_R[i+1]**2.*(-1.*Q1_R[i+1] + 2.*dQ1_dx_R[i+1] - 2.*Q2_R[i+1]*psi_R[i+1]**2.) + (Lx_R[i+1]*dLx_dx_R[i+1] + Ly_R[i+1]*dLy_dx_R[i+1] + Lz_R[i+1]*dLz_dx_R[i+1])*(2.*Q1_R[i+1] + Q2_R[i+1]))) 
+            vR = fmin(-Q1_L[i+2] + 2.*dQ1_dx_L[i+2] - 2.*Q2_L[i+2]*psi_L[i+2]**2., (1./L_L[i+2]**2.)*(L_L[i+2]**2.*(-1.*Q1_L[i+2] + 2.*dQ1_dx_L[i+2] - 2.*Q2_L[i+2]*psi_L[i+2]**2.) + (Lx_L[i+2]*dLx_dx_L[i+2] + Ly_L[i+2]*dLy_dx_L[i+2] + Lz_L[i+2]*dLz_dx_L[i+2])*(2.*Q1_L[i+2] + Q2_L[i+2]))) 
             sL = (HoR**2.)*fmin(vL,vR)
 
 
             # Get maximum signal speed by taking maximum eigen values at left and right faces, and then the maximum of those
-            vL = fmax(-Q1_R[i+1] + 2.*dpsi_dx_R[i+1]*dQ1_dpsi_R[i+1] - 2.*Q2_R[i+1]*psi_R[i+1]**2., (1./L_R[i+1]**2.)*(L_R[i+1]**2.*(-1.*Q1_R[i+1] + 2.*dQ1_dpsi_R[i+1]*dpsi_dx_R[i+1] - 2.*Q2_R[i+1]*psi_R[i+1]**2.) + (Lx_R[i+1]*dLx_dx_R[i+1] + Ly_R[i+1]*dLy_dx_R[i+1] + Lz_R[i+1]*dLz_dx_R[i+1])*(2.*Q1_R[i+1] + Q2_R[i+1]))) 
-            vR = fmax(-Q1_L[i+2] + 2.*dpsi_dx_L[i+2]*dQ1_dpsi_L[i+2] - 2.*Q2_L[i+2]*psi_L[i+2]**2., (1./L_L[i+2]**2.)*(L_L[i+2]**2.*(-1.*Q1_L[i+2] + 2.*dQ1_dpsi_L[i+2]*dpsi_dx_L[i+2] - 2.*Q2_L[i+2]*psi_L[i+2]**2.) + (Lx_L[i+2]*dLx_dx_L[i+2] + Ly_L[i+2]*dLy_dx_L[i+2] + Lz_L[i+2]*dLz_dx_L[i+2])*(2.*Q1_L[i+2] + Q2_L[i+2]))) 
+            vL = fmax(-Q1_R[i+1] + 2.*dQ1_dx_R[i+1] - 2.*Q2_R[i+1]*psi_R[i+1]**2., (1./L_R[i+1]**2.)*(L_R[i+1]**2.*(-1.*Q1_R[i+1] + 2.*dQ1_dx_R[i+1] - 2.*Q2_R[i+1]*psi_R[i+1]**2.) + (Lx_R[i+1]*dLx_dx_R[i+1] + Ly_R[i+1]*dLy_dx_R[i+1] + Lz_R[i+1]*dLz_dx_R[i+1])*(2.*Q1_R[i+1] + Q2_R[i+1]))) 
+            vR = fmax(-Q1_L[i+2] + 2.*dQ1_dx_L[i+2] - 2.*Q2_L[i+2]*psi_L[i+2]**2., (1./L_L[i+2]**2.)*(L_L[i+2]**2.*(-1.*Q1_L[i+2] + 2.*dQ1_dx_L[i+2] - 2.*Q2_L[i+2]*psi_L[i+2]**2.) + (Lx_L[i+2]*dLx_dx_L[i+2] + Ly_L[i+2]*dLy_dx_L[i+2] + Lz_L[i+2]*dLz_dx_L[i+2])*(2.*Q1_L[i+2] + Q2_L[i+2]))) 
             sR = (HoR**2.)*fmax(vL,vR)
 
             # Limit fluxes!
@@ -469,6 +469,8 @@ def evolve(*p):
     cdef double[:] dQ1_dpsi_R  = np.zeros(ngrid)
     cdef double[:] dpsi_dx_L   = np.zeros(ngrid)
     cdef double[:] dpsi_dx_R   = np.zeros(ngrid)
+    cdef double[:] dQ1_dx_L  = np.zeros(ngrid)
+    cdef double[:] dQ1_dx_R  = np.zeros(ngrid)
 
     # Fluxes (interior cell interfaces only only)
     cdef double[:] F_x       = np.zeros(ngrid-3)
@@ -564,7 +566,7 @@ def evolve(*p):
             # Calcualte full L from these quantities
             L_L[i]  = (Lx_L[i]**2. + Ly_L[i]**2. + Lz_L[i]**2.)**0.5
             L_R[i]  = (Lx_R[i]**2. + Ly_R[i]**2. + Lz_R[i]**2.)**0.5
-
+            '''
             ## Do 2nd order, cell-centered differencing for gradients, evaluated at the cell interfaces
             # Lx
             dLx_dx_L[i] = (Lx[i+1]+Lx[i]-Lx[i-1]-Lx[i-2])/4./dx # i - 1/2
@@ -583,7 +585,28 @@ def evolve(*p):
             dly_dx_R[i] = (ly[i+2]+ly[i+1]-ly[i]-ly[i-1])/4./dx # i + 1/2
             # lz
             dlz_dx_L[i] = (lz[i+1]+lz[i]-lz[i-1]-lz[i-2])/4./dx # i - 1/2
-            dlz_dx_R[i] = (lz[i+2]+lz[i+1]-lz[i]-lz[i-1])/4./dx # i + 1/2
+            dlz_dx_R[i] = (lz[i+2]+lz[i+1]-lz[i]-lz[i-1])/4./dx # i + 1/2'''
+            ## Do 2nd order, cell-centered differencing for gradients, evaluated at the cell interfaces. Try shorter stencil?
+            # Lx
+            dLx_dx_L[i] = (Lx[i]-Lx[i-1])/2./dx # i - 1/2
+            dLx_dx_R[i] = (Lx[i+1]-Lx[i])/2./dx # i + 1/2
+            # Ly
+            dLy_dx_L[i] = (Ly[i]-Ly[i-1])/2./dx # i - 1/2
+            dLy_dx_R[i] = (Ly[i+1]-Ly[i])/2./dx # i + 1/2
+            # Lz
+            dLz_dx_L[i] = (Lz[i]-Lz[i-1])/2./dx # i - 1/2
+            dLz_dx_R[i] = (Lz[i+1]-Lz[i])/2./dx # i + 1/2
+            # lx
+            dlx_dx_L[i] = (lx[i]-lx[i-1])/2./dx # i - 1/2
+            dlx_dx_R[i] = (lx[i+1]-lx[i])/2./dx # i + 1/2
+            # ly
+            dly_dx_L[i] = (ly[i]-ly[i-1])/2./dx # i - 1/2
+            dly_dx_R[i] = (ly[i+1]-ly[i])/2./dx # i + 1/2
+            # lz
+            dlz_dx_L[i] = (lz[i]-lz[i-1])/2./dx # i - 1/2
+            dlz_dx_R[i] = (lz[i+1]-lz[i])/2./dx # i + 1/2
+
+            ## Calculate psi from these gradients
             # psi
             psi_L[i]    = (dlx_dx_L[i]**2. + dly_dx_L[i]**2. + dlz_dx_L[i]**2.)**0.5
             psi_R[i]    = (dlx_dx_R[i]**2. + dly_dx_R[i]**2. + dlz_dx_R[i]**2.)**0.5
@@ -620,13 +643,15 @@ def evolve(*p):
                 # Can calculate dpsi_dx at the same time as CFL condition. 
                 dpsi_dx_L[i] = (psi_R[i]-psi_L[i-1])/2./dx # i-1/2
                 dpsi_dx_R[i] = (psi_R[i+1]-psi_L[i])/2./dx # i+1/2
+                dQ1_dx_L[i] = (Q1_R[i]-Q1_L[i-1])/2./dx # i-1/2
+                dQ1_dx_R[i] = (Q1_R[i+1]-Q1_L[i])/2./dx # i+1/2
 
                 ## Check velocity and effective diffusion coefficient for each cell interface to decide timestep. 
                 # left
-                vel_L = (HoR**2.)*fmax(fabs(-Q1_L[i] + 2.*dpsi_dx_L[i]*dQ1_dpsi_L[i] + 2.*Q2_L[i]*psi_L[i]), fabs((1./L_L[i]**2.)*(L_L[i]**2.*(-1.*Q1_L[i] + 2.*dQ1_dpsi_L[i]*dpsi_dx_L[i] + 2.*Q2_L[i]*psi_L[i]**2.) + (Lx_L[i]*dLx_dx_L[i] + Ly_L[i]*dLy_dx_L[i] + Lz_L[i]*dLz_dx_L[i])*(2.*Q1_L[i] + Q2_L[i])))) 
+                vel_L = (HoR**2.)*fmax(fabs(-Q1_L[i] + 2.*dQ1_dx_L[i] + 2.*Q2_L[i]*psi_L[i]), fabs((1./L_L[i]**2.)*(L_L[i]**2.*(-1.*Q1_L[i] + 2.*dQ1_dx_L[i] + 2.*Q2_L[i]*psi_L[i]**2.) + (Lx_L[i]*dLx_dx_L[i] + Ly_L[i]*dLy_dx_L[i] + Lz_L[i]*dLz_dx_L[i])*(2.*Q1_L[i] + Q2_L[i])))) 
                 nu_L  = (HoR**2.)*(Q1_L[i]**2. + Q2_L[i]**2. + Q3_L[i]**2.)**(0.5)
                 # right
-                vel_R = (HoR**2.)*fmax(fabs(-Q1_R[i] + 2.*dpsi_dx_R[i]*dQ1_dpsi_R[i] + 2.*Q2_R[i]*psi_R[i]), fabs((1./L_R[i]**2.)*(L_R[i]**2.*(-1.*Q1_R[i] + 2.*dQ1_dpsi_R[i]*dpsi_dx_R[i] + 2.*Q2_R[i]*psi_R[i]**2.) + (Lx_R[i]*dLx_dx_R[i] + Ly_R[i]*dLy_dx_R[i] + Lz_R[i]*dLz_dx_R[i])*(2.*Q1_R[i] + Q2_R[i])))) 
+                vel_R = (HoR**2.)*fmax(fabs(-Q1_R[i] + 2.*dQ1_dx_R[i] + 2.*Q2_R[i]*psi_R[i]), fabs((1./L_R[i]**2.)*(L_R[i]**2.*(-1.*Q1_R[i] + 2.*dQ1_dx_R[i] + 2.*Q2_R[i]*psi_R[i]**2.) + (Lx_R[i]*dLx_dx_R[i] + Ly_R[i]*dLy_dx_R[i] + Lz_R[i]*dLz_dx_R[i])*(2.*Q1_R[i] + Q2_R[i])))) 
                 nu_R  = (HoR**2.)*(Q1_R[i]**2. + Q2_R[i]**2. + Q3_R[i]**2.)**(0.5)
                 # choose maximum velocity, diffusion to constrain timestep
                 vel = fmax(vel_L/r_shift_half**(-1.5),vel_R*r_shift_half**(-1.5)) * r[i]**(-1.5)
@@ -644,6 +669,8 @@ def evolve(*p):
             for i in range(1,ngrid-1):
                 dpsi_dx_L[i] = (psi_R[i]-psi_L[i-1])/2./dx # i-1/2
                 dpsi_dx_R[i] = (psi_R[i+1]-psi_L[i])/2./dx # i+1/2
+                dQ1_dx_L[i] = (Q1_R[i]-Q1_L[i-1])/2./dx # i-1/2
+                dQ1_dx_R[i] = (Q1_R[i+1]-Q1_L[i])/2./dx # i+1/2
 
         ## get cell-interface gradients
 
@@ -754,6 +781,8 @@ def evolve(*p):
         apply_outflow(psi_R,ngrid)
         apply_outflow(dpsi_dx_L,ngrid)
         apply_outflow(dpsi_dx_R,ngrid)
+        apply_outflow(dQ1_dx_L,ngrid)
+        apply_outflow(dQ1_dx_R,ngrid)
         '''
         Lx_L[0] = Lx_L[1]
         Lx_R[0] = Lx_R[1]
@@ -774,7 +803,7 @@ def evolve(*p):
         '''
 
         ## evolve (get fluxes)
-        F_all = flux_calc(HoR, velmax, dt, ngrid,  Lx_L,  Lx_R,  Ly_L,  Ly_R,  Lz_L,  Lz_R,  L_L,  L_R,  dLx_dx_L,  dLx_dx_R,  dLy_dx_L,  dLy_dx_R,  dLz_dx_L,  dLz_dx_R,  dlx_dx_L,  dlx_dx_R,  dly_dx_L,  dly_dx_R,  dlz_dx_L,  dlz_dx_R,  psi_L,  psi_R,  Q1_L,  Q1_R,  Q2_L,  Q2_R,  Q3_L,  Q3_R,  dQ1_dpsi_L,  dQ1_dpsi_R,  dpsi_dx_L,  dpsi_dx_R)
+        F_all = flux_calc(HoR, velmax, dt, ngrid,  Lx_L,  Lx_R,  Ly_L,  Ly_R,  Lz_L,  Lz_R,  L_L,  L_R,  dLx_dx_L,  dLx_dx_R,  dLy_dx_L,  dLy_dx_R,  dLz_dx_L,  dLz_dx_R,  dlx_dx_L,  dlx_dx_R,  dly_dx_L,  dly_dx_R,  dlz_dx_L,  dlz_dx_R,  psi_L,  psi_R,  Q1_L,  Q1_R,  Q2_L,  Q2_R,  Q3_L,  Q3_R,  dQ1_dpsi_L,  dQ1_dpsi_R,  dpsi_dx_L,  dpsi_dx_R, dQ1_dx_L, dQ1_dx_R)
         F_x = F_all[0]
         F_y = F_all[1]
         F_z = F_all[2]
