@@ -143,9 +143,15 @@ cdef double[:,:] flux_calc(double HoR, double velmax, double dt, int ngrid, doub
             vR = fmax(-Q1_L[i+2] + 2.*dpsi_dx_L[i+2]*dQ1_dpsi_L[i+2] - 2.*Q2_L[i+2]*psi_L[i+2]**2., (1./L_L[i+2]**2.)*(L_L[i+2]**2.*(-1.*Q1_L[i+2] + 2.*dQ1_dpsi_L[i+2]*dpsi_dx_L[i+2] - 2.*Q2_L[i+2]*psi_L[i+2]**2.) + (Lx_L[i+2]*dLx_dx_L[i+2] + Ly_L[i+2]*dLy_dx_L[i+2] + Lz_L[i+2]*dLz_dx_L[i+2])*(2.*Q1_L[i+2] + Q2_L[i+2]))) 
             sR = (HoR**2.)*fmax(vL,vR)
 
-            # Make corrections for velmax!
-            sL = fmax(sL,-velmax)
-            sR = fmin(sR,velmax)
+            # Limit fluxes!
+            #F_x_L[i] = F_x_L[i] * fmin(1.,  fabs(velmax*Lx_L[i]/F_x_L[i]))
+            #F_x_R[i] = F_x_R[i] * fmin(1.,  fabs(velmax*Lx_R[i]/F_x_R[i]))
+            #F_y_L[i] = F_y_L[i] * fmin(1.,  fabs(velmax*Ly_L[i]/F_y_L[i]))
+            #F_y_R[i] = F_y_R[i] * fmin(1.,  fabs(velmax*Ly_R[i]/F_y_R[i]))
+            #F_z_L[i] = F_z_L[i] * fmin(1.,  fabs(velmax*Lz_L[i]/F_z_L[i]))
+            #F_z_R[i] = F_z_R[i] * fmin(1.,  fabs(velmax*Lz_R[i]/F_z_R[i]))
+            #sL = fmax(sL,-velmax)
+            #sR = fmin(sR,velmax)
             
             # Equations 9.82-9.91 of dongwook ams notes
             if (sL >= 0.):
@@ -162,6 +168,9 @@ cdef double[:,:] flux_calc(double HoR, double velmax, double dt, int ngrid, doub
                 F_z[i] = F_z_R[i]
 
         # Check to make sure flux doesn't re-enter grid after it's copied out
+        F_x[0] = fmin(0.,F_x[0])
+        F_y[0] = fmin(0.,F_y[0])
+        F_z[0] = fmin(0.,F_z[0])
         F_x[ngrid-4] = fmax(0.,F_x[ngrid-4])
         F_y[ngrid-4] = fmax(0.,F_y[ngrid-4])
         F_z[ngrid-4] = fmax(0.,F_z[ngrid-4])
@@ -171,6 +180,16 @@ cdef double[:,:] flux_calc(double HoR, double velmax, double dt, int ngrid, doub
         F_all[1] = F_y
         F_all[2] = F_z
         return F_all
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef double[:] apply_outflow(double[:] vec, int ngrid):
+    vec[0] = 1.0 * vec[2]
+    vec[1] = 1.0 * vec[2]
+    vec[ngrid-1] = 1.0 * vec[ngrid-3]
+    vec[ngrid-2] = 1.0 * vec[ngrid-3]
+    return vec
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
@@ -320,14 +339,14 @@ def evolve(*p):
     # for Lense-Thirring source term
     _omega_p = np.zeros(3*ngrid)
     _omega_p = np.reshape(_omega_p, (ngrid,3))
-    _omega_p[:,2] = 2.0 * bhspin / _r**(1.5)# in tau coordinates _r**3.0 # x/y components are zero, z component is LT precession frequency
+    _omega_p[:,2] = 2.0 * bhspin / _r**(3.0)# in tau coordinates _r**3.0 # x/y components are zero, z component is LT precession frequency
  
     # calculate (approximate) viscous time (t_visc = r0**2./nu1(psi=0))
     if (Q_dim == "1d"):
         nu_ref    = (-2.0/3.0)*(-1.0*10**(interp_1d(_s_arr,np.log10(-Q1_parsed + 1e-30),0,ng_Q)))*((HoR**2.0)*r0**0.5)
     elif (Q_dim == "2d"):
         nu_ref = (-2.0/3.0)*(-1.0*10**(interp_2d(_r_arr,_s_arr,np.log10(-Q1_parsed + 1e-30),rmax_Q,0,ng_Q)))*((HoR**2.0)*r0**0.5)
-    t_viscous = r0**2/nu_ref / rmin**(1.5) # tau units
+    t_viscous = r0**2/nu_ref # / rmin**(1.5) # tau units
  
     # convert tmax, io_freq from t_viscous units to code units
     tmax    = tmax*t_viscous
@@ -465,11 +484,13 @@ def evolve(*p):
 
     # miscellaneous variables
     cdef double Lx_tmp, Ly_tmp
+    cdef double r_shift_half = np.exp(_dx/2.)
     cdef double small = 1e-30
     cdef double dt = 1000000000000000000.
     cdef double tmp_slope # for data reconstruction
-    cdef double vel,nu
-    cdef double velmax  = 0.5*HoR # 1/2 sound speed in code units
+    cdef double vel,vel_L,vel_R,nu,nu_L,nu_R
+    cdef double velmax  = 0.5 # in fractions of the sound speed
+    cdef double sigma_floor = 1e-2 * np.min(_sigma)
     cdef int i
     cdef double[:] Lx_inf = _lda_vec[ngrid-2:ngrid,0]
     cdef double[:] Ly_inf = _lda_vec[ngrid-2:ngrid,1]
@@ -523,46 +544,143 @@ def evolve(*p):
  
         ### Reconstruct, Evolve, Average algorithm
 
-        ## calculate cell-centered gradients
+        ## During first iteration we have cell-centered, Lx,Ly,Lz,lx,ly,lz. We can use this to calculate most cell-interface values: 
+        # Lx, Ly, Lz, dLx, dLy, dLz, dlx, dly, dlz, psi, Q1, Q2, Q3
+        for i in range(2,ngrid-2):
+            
+            ## Linear reconstruction for Lx,Ly,Lz
+            # Lx
+            tmp_slope = minmod( (Lx[i] - Lx[i-1])/dx, (Lx[i+1] - Lx[i])/dx)
+            Lx_L[i] = Lx[i] - tmp_slope*dx/2.
+            Lx_R[i] = Lx[i] + tmp_slope*dx/2.
+            # Ly
+            tmp_slope = minmod( (Ly[i] - Ly[i-1])/dx, (Ly[i+1] - Ly[i])/dx)
+            Ly_L[i] = Ly[i] - tmp_slope*dx/2.
+            Ly_R[i] = Ly[i] + tmp_slope*dx/2.
+            # Lz
+            tmp_slope = minmod( (Lz[i] - Lz[i-1])/dx, (Lz[i+1] - Lz[i])/dx)
+            Lz_L[i] = Lz[i] - tmp_slope*dx/2.
+            Lz_R[i] = Lz[i] + tmp_slope*dx/2.
+            # Calcualte full L from these quantities
+            L_L[i]  = (Lx_L[i]**2. + Ly_L[i]**2. + Lz_L[i]**2.)**0.5
+            L_R[i]  = (Lx_R[i]**2. + Ly_R[i]**2. + Lz_R[i]**2.)**0.5
 
-        for i in range(1,ngrid-1):
-            dLx_dx[i]  = (0.5/dx) * (Lx[i+1] - Lx[i-1])
-            dLy_dx[i]  = (0.5/dx) * (Ly[i+1] - Ly[i-1])
-            dLz_dx[i]  = (0.5/dx) * (Lz[i+1] - Lz[i-1])
+            ## Do 2nd order, cell-centered differencing for gradients, evaluated at the cell interfaces
+            # Lx
+            dLx_dx_L[i] = (Lx[i+1]+Lx[i]-Lx[i-1]-Lx[i-2])/4./dx # i - 1/2
+            dLx_dx_R[i] = (Lx[i+2]+Lx[i+1]-Lx[i]-Lx[i-1])/4./dx # i + 1/2
+            # Ly
+            dLy_dx_L[i] = (Ly[i+1]+Ly[i]-Ly[i-1]-Ly[i-2])/4./dx # i - 1/2
+            dLy_dx_R[i] = (Ly[i+2]+Ly[i+1]-Ly[i]-Ly[i-1])/4./dx # i + 1/2
+            # Lz
+            dLz_dx_L[i] = (Lz[i+1]+Lz[i]-Lz[i-1]-Lz[i-2])/4./dx # i - 1/2
+            dLz_dx_R[i] = (Lz[i+2]+Lz[i+1]-Lz[i]-Lz[i-1])/4./dx # i + 1/2
+            # lx
+            dlx_dx_L[i] = (lx[i+1]+lx[i]-lx[i-1]-lx[i-2])/4./dx # i - 1/2
+            dlx_dx_R[i] = (lx[i+2]+lx[i+1]-lx[i]-lx[i-1])/4./dx # i + 1/2
+            # ly
+            dly_dx_L[i] = (ly[i+1]+ly[i]-ly[i-1]-ly[i-2])/4./dx # i - 1/2
+            dly_dx_R[i] = (ly[i+2]+ly[i+1]-ly[i]-ly[i-1])/4./dx # i + 1/2
+            # lz
+            dlz_dx_L[i] = (lz[i+1]+lz[i]-lz[i-1]-lz[i-2])/4./dx # i - 1/2
+            dlz_dx_R[i] = (lz[i+2]+lz[i+1]-lz[i]-lz[i-1])/4./dx # i + 1/2
+            # psi
+            psi_L[i]    = (dlx_dx_L[i]**2. + dly_dx_L[i]**2. + dlz_dx_L[i]**2.)**0.5
+            psi_R[i]    = (dlx_dx_R[i]**2. + dly_dx_R[i]**2. + dlz_dx_R[i]**2.)**0.5
 
-            dlx_dx[i]  = (0.5/dx) * (lx[i+1] - lx[i-1])
-            dly_dx[i]  = (0.5/dx) * (ly[i+1] - ly[i-1])
-            dlz_dx[i]  = (0.5/dx) * (lz[i+1] - lz[i-1])
+            ## Interpolate Q1, Q2, Q3. Interpolation depends on whether we have Q coefficients that depend just on psi ("1D") or psi and radius ("2D"). 
+            #if (dim_type == 0):  # 1D Q tables
+            #    Q1[i]       = -1.0*(10**(interp_1d(s_arr,Q1_1d_arr,psi[i],ng_Q)))
+            #    Q2[i]       = 10**(interp_1d(s_arr,Q2_1d_arr,psi[i],ng_Q))
+            #    Q3[i]       = interp_1d(s_arr,Q3_1d_arr,psi[i],ng_Q)#10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))
+            #    dQ1_dpsi[i] = interp_1d(s_arr,dQ1_dpsi_1d_arr,psi[i],ng_Q)#10**(interp_1d(s_arr,dQ1_dpsi_arr,psi[i],ng_Q))
+            #elif (dim_type == 1): # 2D Q_tables
+            #    Q1[i]       = -1.0*(10**(interp_2d(r_arr,s_arr,Q1_2d_arr,r[i],psi[i],ng_Q)))
+            #    Q2[i]       = 10**(interp_2d(r_arr,s_arr,Q2_2d_arr,r[i],psi[i],ng_Q))
+            #    Q3[i]       = interp_2d(r_arr,s_arr,Q3_2d_arr,r[i],psi[i],ng_Q)#10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))
+            #    dQ1_dpsi[i] = interp_2d(r_arr,s_arr,dQ1_dpsi_2d_arr,r[i],psi[i],ng_Q)#10**(interp_1d(s_arr,dQ1_dpsi_arr,psi[i],ng_Q))
+            # assuming 1D Q tables, for now!
+            Q1_L[i]       = -1.0*(10**(interp_1d(s_arr,Q1_1d_arr,psi_L[i],ng_Q)))
+            Q2_L[i]       = 10**(interp_1d(s_arr,Q2_1d_arr,psi_L[i],ng_Q))
+            Q3_L[i]       = interp_1d(s_arr,Q3_1d_arr,psi_L[i],ng_Q)
+            dQ1_dpsi_L[i] = interp_1d(s_arr,dQ1_dpsi_1d_arr,psi_L[i],ng_Q)
+            Q1_R[i]       = -1.0*(10**(interp_1d(s_arr,Q1_1d_arr,psi_R[i],ng_Q)))
+            Q2_R[i]       = 10**(interp_1d(s_arr,Q2_1d_arr,psi_R[i],ng_Q))
+            Q3_R[i]       = interp_1d(s_arr,Q3_1d_arr,psi_R[i],ng_Q)
+            dQ1_dpsi_R[i] = interp_1d(s_arr,dQ1_dpsi_1d_arr,psi_R[i],ng_Q)
 
-            psi[i]      = (dlx_dx[i]**2. + dly_dx[i]**2. + dlz_dx[i]**2.)**0.5
-            if (dim_type == 0): # 1D Q tables
-                Q1[i]       = -1.0*(10**(interp_1d(s_arr,Q1_1d_arr,psi[i],ng_Q)))
-                Q2[i]       = 10**(interp_1d(s_arr,Q2_1d_arr,psi[i],ng_Q))
-                Q3[i]       = interp_1d(s_arr,Q3_1d_arr,psi[i],ng_Q)#10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))
-                dQ1_dpsi[i] = interp_1d(s_arr,dQ1_dpsi_1d_arr,psi[i],ng_Q)#10**(interp_1d(s_arr,dQ1_dpsi_arr,psi[i],ng_Q))
-            elif (dim_type == 1): # 2D Q_tables
-                Q1[i]       = -1.0*(10**(interp_2d(r_arr,s_arr,Q1_2d_arr,r[i],psi[i],ng_Q)))
-                Q2[i]       = 10**(interp_2d(r_arr,s_arr,Q2_2d_arr,r[i],psi[i],ng_Q))
-                Q3[i]       = interp_2d(r_arr,s_arr,Q3_2d_arr,r[i],psi[i],ng_Q)#10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))
-                dQ1_dpsi[i] = interp_2d(r_arr,s_arr,dQ1_dpsi_2d_arr,r[i],psi[i],ng_Q)#10**(interp_1d(s_arr,dQ1_dpsi_arr,psi[i],ng_Q))
-            dpsi_dx[i] = (0.5/dx) * (psi[i+1] - psi[i-1])
-
-        # only do the cfl on predictor step
+        ## During 2nd iteration, we can do CFL condition and calculate dpsi_dx at cell-interfaces; everything else we got last iteration. 
+        # If using 2nd order predictor-correct time evolution, only do cfl on the predictor step. 
         if (predictor or (not do_predictor)): 
             ## cfl condition
             # Here, we do something qualitatively similar to Equation (50) of Diego Munoz 2012
             dt = 1000000000000000000.
-            for i in range(1,ngrid-1):
-                vel = (HoR**2.)*fmax(fabs(-Q1[i] + 2.*dpsi_dx[i]*dQ1_dpsi[i] + 2.*Q2[i]*psi[i]), fabs((1./L[i]**2.)*(L[i]**2.*(-1.*Q1[i] + 2.*dQ1_dpsi[i]*dpsi_dx[i] + 2.*Q2[i]*psi[i]**2.) + (Lx[i]*dLx_dx[i] + Ly[i]*dLy_dx[i] + Lz[i]*dLz_dx[i])*(2.*Q1[i] + Q2[i])))) 
-                nu  = (HoR**2.)*(Q1[i]**2. + Q2[i]**2. + Q3[i]**2.)**(0.5)
-                if (vel > velmax): printf("Wave speed eclipses half the sound speed at i = %d!\n",i)
-                #vel = fmin(vel,velmax)
+            for i in range(2,ngrid-2):
+
+                # Can calculate dpsi_dx at the same time as CFL condition. 
+                dpsi_dx_L[i] = (psi_R[i]-psi_L[i-1])/2./dx # i-1/2
+                dpsi_dx_R[i] = (psi_R[i+1]-psi_L[i])/2./dx # i+1/2
+
+                ## Check velocity and effective diffusion coefficient for each cell interface to decide timestep. 
+                # left
+                vel_L = (HoR**2.)*fmax(fabs(-Q1_L[i] + 2.*dpsi_dx_L[i]*dQ1_dpsi_L[i] + 2.*Q2_L[i]*psi_L[i]), fabs((1./L_L[i]**2.)*(L_L[i]**2.*(-1.*Q1_L[i] + 2.*dQ1_dpsi_L[i]*dpsi_dx_L[i] + 2.*Q2_L[i]*psi_L[i]**2.) + (Lx_L[i]*dLx_dx_L[i] + Ly_L[i]*dLy_dx_L[i] + Lz_L[i]*dLz_dx_L[i])*(2.*Q1_L[i] + Q2_L[i])))) 
+                nu_L  = (HoR**2.)*(Q1_L[i]**2. + Q2_L[i]**2. + Q3_L[i]**2.)**(0.5)
+                # right
+                vel_R = (HoR**2.)*fmax(fabs(-Q1_R[i] + 2.*dpsi_dx_R[i]*dQ1_dpsi_R[i] + 2.*Q2_R[i]*psi_R[i]), fabs((1./L_R[i]**2.)*(L_R[i]**2.*(-1.*Q1_R[i] + 2.*dQ1_dpsi_R[i]*dpsi_dx_R[i] + 2.*Q2_R[i]*psi_R[i]**2.) + (Lx_R[i]*dLx_dx_R[i] + Ly_R[i]*dLy_dx_R[i] + Lz_R[i]*dLz_dx_R[i])*(2.*Q1_R[i] + Q2_R[i])))) 
+                nu_R  = (HoR**2.)*(Q1_R[i]**2. + Q2_R[i]**2. + Q3_R[i]**2.)**(0.5)
+                # choose maximum velocity, diffusion to constrain timestep
+                vel = fmax(vel_L/r_shift_half**(-1.5),vel_R*r_shift_half**(-1.5)) * r[i]**(-1.5)
+                nu = fmax(nu_L/r_shift_half**(-1.5),nu_R*r_shift_half**(-1.5)) * r[i]**(-1.5) ### later put r_shift_half back
+
+                # Check tosee if wave velocities are bounded as they are expected to be
+                #if (vel > velmax*(HoR**2.)*r[i]**(-1.5)): printf("Wave speed eclipses half the sound speed at i = %d! vel/velmax = %e\n",i,vel/(velmax*(HoR**2.)*r[i]**(-1.5)))
+                
                 dt = fmin(dt,fabs(cfl*(dx/vel/(1. + 2.*nu/(vel*dx)))))
-            if predictor: dt = dt/2. # this is for half-timestep evolution; will multiply by two afterwards
+
+            # This step is for predictor half-timestep evolution; will multiply by two afterwards
+            if (do_predictor): dt = dt/2. 
+        else:
+            # If we're using predictor-corrector time evolution, and we're on the "corrector" stage, we only need to calculate dpsi_dx here. 
+            for i in range(1,ngrid-1):
+                dpsi_dx_L[i] = (psi_R[i]-psi_L[i-1])/2./dx # i-1/2
+                dpsi_dx_R[i] = (psi_R[i+1]-psi_L[i])/2./dx # i+1/2
 
         ## get cell-interface gradients
 
+        '''
         for i in range(1,ngrid-1):
+
+            ## Lets try a solution to mimic something like a staggered grid. We'll still technically use a central difference, but evaluate it at the cell interfaces.
+            dLx_dx_L[i] = (Lx[i]-Lx[i-1])/dx
+            dLx_dx_R[i] = (Lx[i+1]-Lx[i])/dx
+            dLy_dx_L[i] = (Ly[i]-Ly[i-1])/dx
+            dLy_dx_R[i] = (Ly[i+1]-Ly[i])/dx
+            dLz_dx_L[i] = (Lz[i]-Lz[i-1])/dx
+            dLz_dx_R[i] = (Lz[i+1]-Lz[i])/dx
+
+            dlx_dx_L[i] = (lx[i]-lx[i-1])/dx
+            dlx_dx_R[i] = (lx[i+1]-lx[i])/dx
+            dly_dx_L[i] = (ly[i]-ly[i-1])/dx
+            dly_dx_R[i] = (ly[i+1]-ly[i])/dx
+            dlz_dx_L[i] = (lz[i]-lz[i-1])/dx
+            dlz_dx_R[i] = (lz[i+1]-lz[i])/dx
+
+            psi_L[i]    = (dlx_dx_L[i]**2. + dly_dx_L[i]**2. + dlz_dx_L[i]**2.)**0.5
+            psi_R[i]    = (dlx_dx_R[i]**2. + dly_dx_R[i]**2. + dlz_dx_R[i]**2.)**0.5
+
+            ## for now; this equivalent to making dpsi_dx piecewise constant
+            dpsi_dx_L[i] = (1./dx)*(psi_R[i]-psi_L[i])
+            dpsi_dx_R[i] = (1./dx)*(psi_R[i]-psi_L[i])
+
+            # assuming 1D Q tables, for now!
+            Q1_L[i]       = -1.0*(10**(interp_1d(s_arr,Q1_1d_arr,psi_L[i],ng_Q)))
+            Q2_L[i]       = 10**(interp_1d(s_arr,Q2_1d_arr,psi_L[i],ng_Q))
+            Q3_L[i]       = interp_1d(s_arr,Q3_1d_arr,psi_L[i],ng_Q)
+            dQ1_dpsi_L[i] = interp_1d(s_arr,dQ1_dpsi_1d_arr,psi_L[i],ng_Q)
+            Q1_R[i]       = -1.0*(10**(interp_1d(s_arr,Q1_1d_arr,psi_R[i],ng_Q)))
+            Q2_R[i]       = 10**(interp_1d(s_arr,Q2_1d_arr,psi_R[i],ng_Q))
+            Q3_R[i]       = interp_1d(s_arr,Q3_1d_arr,psi_R[i],ng_Q)
+            dQ1_dpsi_R[i] = interp_1d(s_arr,dQ1_dpsi_1d_arr,psi_R[i],ng_Q)
             ## Try minmod slope limiter
             # L
             tmp_slope = minmod( (dLx_dx[i] - dLx_dx[i-1])/dx, (dLx_dx[i+1] - dLx_dx[i])/dx)
@@ -606,24 +724,37 @@ def evolve(*p):
             tmp_slope = minmod( (dQ1_dpsi[i] - dQ1_dpsi[i-1])/dx, (dQ1_dpsi[i+1] - dQ1_dpsi[i])/dx)
             dQ1_dpsi_L[i] = dQ1_dpsi[i] - tmp_slope*dx/2.
             dQ1_dpsi_R[i] = dQ1_dpsi[i] + tmp_slope*dx/2.
+        '''
 
-            # Lx
-            tmp_slope = minmod( (Lx[i] - Lx[i-1])/dx, (Lx[i+1] - Lx[i])/dx)
-            Lx_L[i] = Lx[i] - tmp_slope*dx/2.
-            Lx_R[i] = Lx[i] + tmp_slope*dx/2.
-            # Ly
-            tmp_slope = minmod( (Ly[i] - Ly[i-1])/dx, (Ly[i+1] - Ly[i])/dx)
-            Ly_L[i] = Ly[i] - tmp_slope*dx/2.
-            Ly_R[i] = Ly[i] + tmp_slope*dx/2.
-            # Lz
-            tmp_slope = minmod( (Lz[i] - Lz[i-1])/dx, (Lz[i+1] - Lz[i])/dx)
-            Lz_L[i] = Lz[i] - tmp_slope*dx/2.
-            Lz_R[i] = Lz[i] + tmp_slope*dx/2.
-            # Calcualte full L from these quantities
-            L_L[i]  = (Lx_L[i]**2. + Ly_L[i]**2. + Lz_L[i]**2.)**0.5
-            L_R[i]  = (Lx_R[i]**2. + Ly_R[i]**2. + Lz_R[i]**2.)**0.5
 
         # for PLM, lets fill guard cells
+        apply_outflow(Lx_L,ngrid)
+        apply_outflow(Lx_R,ngrid)
+        apply_outflow(Ly_L,ngrid)
+        apply_outflow(Ly_R,ngrid)
+        apply_outflow(Lz_L,ngrid)
+        apply_outflow(Lz_R,ngrid)
+        apply_outflow(L_L,ngrid)
+        apply_outflow(L_R,ngrid)
+        apply_outflow(dLx_dx_L,ngrid)
+        apply_outflow(dLx_dx_R,ngrid)
+        apply_outflow(dLy_dx_L,ngrid)
+        apply_outflow(dLy_dx_R,ngrid)
+        apply_outflow(dLz_dx_L,ngrid)
+        apply_outflow(dLz_dx_R,ngrid)
+        apply_outflow(Q1_L,ngrid)
+        apply_outflow(Q1_R,ngrid)
+        apply_outflow(Q2_L,ngrid)
+        apply_outflow(Q2_R,ngrid)
+        apply_outflow(Q3_L,ngrid)
+        apply_outflow(Q3_R,ngrid)
+        apply_outflow(dQ1_dpsi_L,ngrid)
+        apply_outflow(dQ1_dpsi_R,ngrid)
+        apply_outflow(psi_L,ngrid)
+        apply_outflow(psi_R,ngrid)
+        apply_outflow(dpsi_dx_L,ngrid)
+        apply_outflow(dpsi_dx_R,ngrid)
+        '''
         Lx_L[0] = Lx_L[1]
         Lx_R[0] = Lx_R[1]
         Lx_L[ngrid] = Lx_L[ngrid-1]
@@ -640,6 +771,7 @@ def evolve(*p):
         L_R[0]  = (Lx_R[1]**2. + Ly_R[1]**2. + Lz_R[1]**2.)**0.5
         L_L[ngrid]  = (Lx_L[ngrid-1]**2. + Ly_L[ngrid-1]**2. + Lz_L[ngrid-1]**2.)**0.5
         L_R[ngrid]  = (Lx_R[ngrid-1]**2. + Ly_R[ngrid-1]**2. + Lz_R[ngrid-1]**2.)**0.5
+        '''
 
         ## evolve (get fluxes)
         F_all = flux_calc(HoR, velmax, dt, ngrid,  Lx_L,  Lx_R,  Ly_L,  Ly_R,  Lz_L,  Lz_R,  L_L,  L_R,  dLx_dx_L,  dLx_dx_R,  dLy_dx_L,  dLy_dx_R,  dLz_dx_L,  dLz_dx_R,  dlx_dx_L,  dlx_dx_R,  dly_dx_L,  dly_dx_R,  dlz_dx_L,  dlz_dx_R,  psi_L,  psi_R,  Q1_L,  Q1_R,  Q2_L,  Q2_R,  Q3_L,  Q3_R,  dQ1_dpsi_L,  dQ1_dpsi_R,  dpsi_dx_L,  dpsi_dx_R)
@@ -649,9 +781,9 @@ def evolve(*p):
 
         ## update
         for i in range(2,ngrid-2):
-            Lx[i] = Lx_old[i] - (dt/dx)*(F_x[i-1] - F_x[i-2])
-            Ly[i] = Ly_old[i] - (dt/dx)*(F_y[i-1] - F_y[i-2])
-            Lz[i] = Lz_old[i] - (dt/dx)*(F_z[i-1] - F_z[i-2])
+            Lx[i] = Lx_old[i] - (dt/dx)*(F_x[i-1] - F_x[i-2]) * r[i]**(-1.5)
+            Ly[i] = Ly_old[i] - (dt/dx)*(F_y[i-1] - F_y[i-2]) * r[i]**(-1.5)
+            Lz[i] = Lz_old[i] - (dt/dx)*(F_z[i-1] - F_z[i-2]) * r[i]**(-1.5)
 
         for i in range(ngrid):
             ## Update external torques
@@ -665,6 +797,17 @@ def evolve(*p):
             lx[i] = Lx[i]/L[i]
             ly[i] = Ly[i]/L[i]
             lz[i] = Lz[i]/L[i]
+
+            # apply density floor
+            if (HoR**(-2.)*L[i]*r[i] < sigma_floor):
+                printf("Sigma floor = %e, cell i = %d has sigma = %e\n",sigma_floor,i,HoR**(-2.)*L[i]*r[i])
+                L[i] = fmax(sigma_floor,(HoR**(-2.))*L[i]*r[i])*HoR**(2.)/r[i]
+                printf("and now: Sigma floor = %e, cell i = %d has sigma = %e\n",sigma_floor,i,HoR**(-2.)*L[i]*r[i])
+            L[i] = fmax(sigma_floor,(HoR**(-2.))*L[i]/r[i])*HoR**(2.)*r[i]
+            Lx[i] = L[i] * lx[i]
+            Ly[i] = L[i] * ly[i]
+            Lz[i] = L[i] * lz[i]
+
 
         ## apply boundary conditions
         ## Weight by R so sigma is continuous! L should have profile at boundaries

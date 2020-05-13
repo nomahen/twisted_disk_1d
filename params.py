@@ -20,7 +20,7 @@ bc      = "infinite"  # boundary condition ["sink" or "outflow" or "mix" or "inf
 
 # Output
 io_freq   = 100             # how many number of steps to plot at
-io_prefix = "./outputs/tilt45_rmax1e4/n800/evolve_rmin60_rad_" # prefix for output files
+io_prefix = "./outputs/tilt45_rmax1e4_new/n800/evolve_rmin60_rad_" # prefix for output files
 
 # Q1, Q2, Q3
 Q_dim = "1d" # Dimension of Q tables ["1d" or "2d"]
