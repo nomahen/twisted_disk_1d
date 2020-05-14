@@ -8,19 +8,19 @@ tilt     = 45.      # initial disk tilt [degrees; 0 < tilt < 90]
 bhspin   = 1.      # black hole spin [0 < bhspin < 1]
 r0       = 100.     # midpoint of density distribution [r_g; rmin < r0 < rmax]
 rw       = 60.      # Gaussian width of density distribution [r_g; rw > 0]
-rmin     = 6.0     # Inner radius of disk [r_g]
-rmax     = 100.0   # Outer radius of disk [r_g]
+rmin     = 100.0     # Inner radius of disk [r_g]
+rmax     = 1000.0   # Outer radius of disk [r_g]
 rho_type = "flat"   # Type of density distribution ["gauss" or "flat"]
 
 # Numerical parameters
-tmax    = 0.1   # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
+tmax    = 0.01   # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
 cfl     = 0.8   # Courant-Friedrichs-Lewy number
 ngrid   = 200    # num grid points
 bc      = "infinite"  # boundary condition ["sink" or "outflow" or "mix" or "infinite"]
 
 # Output
-io_freq   = 100             # how many number of steps to plot at
-io_prefix = "./outputs/evolve_rmin60_rad_" # prefix for output files
+io_freq   = 1e-5             # Frequency
+io_prefix = "./outputs/convergence_tests/tilt1_outer/medium/n200/output_" # prefix for output files
 
 # Q1, Q2, Q3
 Q_dim = "1d" # Dimension of Q tables ["1d" or "2d"]

@@ -4,7 +4,7 @@ from scipy.interpolate import interp1d
 from scipy.ndimage import map_coordinates
 from scipy.interpolate import griddata
 
-def build_table(filename):
+def build_table(filename,HoR):
     data_array = np.genfromtxt(filename)
 
     ## Read from columns of data arrays
@@ -15,18 +15,29 @@ def build_table(filename):
     Q1 = data_array[:,4]
     Q2 = data_array[:,5]
     Q3 = data_array[:,6]
+    t  = data_array[:,7]
 
     ## Get more quantities
     L = np.sqrt(Lx*Lx + Ly*Ly + Lz*Lz)
     lx = Lx/L
     ly = Ly/L
     lz = Lz/L
+    
+    # local tilt angle
     tilt = np.arcsin(np.sqrt(lx*lx + ly*ly))*180.0/np.pi
+    
+    # precession angle
     prec = np.arctan2(ly,lx)*180.0/np.pi
+    # correct precession angle to be cumulative
+    for nn in np.flip(range(0,len(prec)-1)):
+        prec[nn] = prec[nn+1] + ((prec[nn] - prec[nn+1]) % 180.)
+    
+    # surface density
+    sigma = L/r/HoR**2.
 
     ## Compile tables
-    table_list   = [Lx,Ly,Lz,r,L,lx,ly,lz,tilt,prec]
-    table_titles = ["Lx","Ly","Lz","r","L","lx","ly","lz","tilt","prec"]
+    table_list   = [Lx,Ly,Lz,r,t,L,lx,ly,lz,tilt,prec,sigma]
+    table_titles = ["Lx","Ly","Lz","r","t","L","lx","ly","lz","tilt","prec","sigma"]
     return QTable(data=table_list,names=table_titles)
 
 def build_data(prefix,ngrid,tgrid,data_ngrid,order=3,convert=True,HoR=1e-3):
