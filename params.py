@@ -13,14 +13,14 @@ rmax     = 1000.0   # Outer radius of disk [r_g]
 rho_type = "flat"   # Type of density distribution ["gauss" or "flat"]
 
 # Numerical parameters
-tmax    = 0.01   # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
+tmax    = 0.0001   # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
 cfl     = 0.8   # Courant-Friedrichs-Lewy number
-ngrid   = 200    # num grid points
+ngrid   = 300    # num grid points
 bc      = "infinite"  # boundary condition ["sink" or "outflow" or "mix" or "infinite"]
 
 # Output
 io_freq   = 1e-5             # Frequency
-io_prefix = "./outputs/convergence_tests/tilt1_outer/medium/n200/output_" # prefix for output files
+io_prefix = "./outputs/output_" # prefix for output files
 
 # Q1, Q2, Q3
 Q_dim = "1d" # Dimension of Q tables ["1d" or "2d"]
