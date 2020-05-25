@@ -135,6 +135,7 @@ def evolve(*p):
     ## Get params 
     cdef double alpha, gamma, HoR, tilt, bhspin, r0, rw, rmin, rmax, tmax, smax, cfl, io_freq
     cdef int    ngrid, bc_type, dim_type
+    cdef int    ngc = 2 # number of guard cells
     cdef bint   dolog
     cdef char*  io_prefix
     alpha,gamma,HoR,tilt,bhspin,r0,rw,rmin,rmax,rho_type,tmax,cfl,ngrid,bc,io_freq,io_prefix,Q_dim,smax,rmax_Q,Q1_path,Q2_path,Q3_path = p
@@ -180,8 +181,13 @@ def evolve(*p):
     cdef double nu_ref, t_viscous
  
     ## internal coordinate: r = np
-    _r = np.logspace(np.log(rmin),np.log(rmax),ngrid,base=np.exp(1)) # natural base
-    _dx = np.average(np.log(_r)[1:] - np.log(_r)[:-1])
+    xmin = np.log(rmin)
+    xmax = np.log(rmax)
+    _dx  = (xmax-xmin)/ngrid
+    _x   = np.arange(xmin-(ngc-0.5)*_dx,xmax+(ngc+0.5)*_dx,_dx)
+    _r = np.exp(_x)
+    #_r = np.logspace(np.log(rmin),np.log(rmax),ngrid,base=np.exp(1)) # natural base
+    #_dx = np.average(np.log(_r)[1:] - np.log(_r)[:-1])
  
     # orbital frequency is Keplerian
     omega = _r**(-3./2.)
@@ -191,9 +197,9 @@ def evolve(*p):
     # is constant regardless of distribution
     # sigma ~ surface density
     if rho_type == "flat":
-        _sigma = np.ones(ngrid)*100.
+        _sigma = np.ones(ngrid+2*ngc)*100.
     elif rho_type == "gauss":
-        _sigma = (1.0/(rw*np.sqrt(2.0*np.pi))) * np.exp(-0.5*((_r - r0)/rw)**2.0) + np.ones(ngrid)
+        _sigma = (1.0/(rw*np.sqrt(2.0*np.pi))) * np.exp(-0.5*((_r - r0)/rw)**2.0) + np.ones(ngrid+2*ngc)
     else:
         print "Error! rho_type needs to be set to \"gauss\" or \"flat\"! Exiting"
         exit()
@@ -202,14 +208,14 @@ def evolve(*p):
     # Here we are using Lambda = I * Omega * r**2., where I = (h/r)^2 * Sigma * r^2 (assuming gamma = 1)
     lda_mag = (HoR)**2. * _sigma * omega**2. * _r**4.
     prec = 0.0
-    lda_unit = np.array([np.array([np.sin(tilt)*np.cos(prec),np.sin(tilt)*np.sin(prec),np.cos(tilt)])]*ngrid) # each annulus oriented in the same direction initially
+    lda_unit = np.array([np.array([np.sin(tilt)*np.cos(prec),np.sin(tilt)*np.sin(prec),np.cos(tilt)])]*(ngrid+2*ngc)) # each annulus oriented in the same direction initially
     _lda_vec  = np.copy(lda_unit) # building [Lambda_x,Lambda_y,Lambda_z] for each radial grid element
     for j in range(3): _lda_vec[:,j] *= lda_mag
  
  
     # for Lense-Thirring source term
-    _omega_p = np.zeros(3*ngrid)
-    _omega_p = np.reshape(_omega_p, (ngrid,3))
+    _omega_p = np.zeros(3*(ngrid+2*ngc))
+    _omega_p = np.reshape(_omega_p, (ngrid+2*ngc,3))
     _omega_p[:,2] = 2.0 * bhspin / _r**(3.0)# in tau coordinates _r**3.0 # x/y components are zero, z component is LT precession frequency
  
     # calculate (approximate) viscous time (t_visc = r0**2./nu1(psi=0))
@@ -294,68 +300,68 @@ def evolve(*p):
     cdef double[:] omega_p_z = np.copy(_omega_p[:,2]) #* _r**(1.5) # convert to per tau units
 
     # Primitive variables
-    cdef double[:] Lx_L      = np.zeros(ngrid)
-    cdef double[:] Lx_R      = np.zeros(ngrid)
-    cdef double[:] Ly_L      = np.zeros(ngrid)
-    cdef double[:] Ly_R      = np.zeros(ngrid)
-    cdef double[:] Lz_L      = np.zeros(ngrid)
-    cdef double[:] Lz_R      = np.zeros(ngrid)
-    cdef double[:] L_L       = np.zeros(ngrid)
-    cdef double[:] L_R       = np.zeros(ngrid)
+    cdef double[:] Lx_L      = np.zeros(ngrid+2*ngc)
+    cdef double[:] Lx_R      = np.zeros(ngrid+2*ngc)
+    cdef double[:] Ly_L      = np.zeros(ngrid+2*ngc)
+    cdef double[:] Ly_R      = np.zeros(ngrid+2*ngc)
+    cdef double[:] Lz_L      = np.zeros(ngrid+2*ngc)
+    cdef double[:] Lz_R      = np.zeros(ngrid+2*ngc)
+    cdef double[:] L_L       = np.zeros(ngrid+2*ngc)
+    cdef double[:] L_R       = np.zeros(ngrid+2*ngc)
 
     # Cell centered gradients
-    cdef double[:] dLx_dx    = np.zeros(ngrid)
-    cdef double[:] dLy_dx    = np.zeros(ngrid)
-    cdef double[:] dLz_dx    = np.zeros(ngrid)
-    cdef double[:] dlx_dx    = np.zeros(ngrid)
-    cdef double[:] dly_dx    = np.zeros(ngrid)
-    cdef double[:] dlz_dx    = np.zeros(ngrid)
-    cdef double[:] psi       = np.zeros(ngrid)
-    cdef double[:] Q1        = np.zeros(ngrid)
-    cdef double[:] Q2        = np.zeros(ngrid)
-    cdef double[:] Q3        = np.zeros(ngrid)
-    cdef double[:] dQ1_dpsi  = np.zeros(ngrid)
-    cdef double[:] dpsi_dx   = np.zeros(ngrid)
+    cdef double[:] dLx_dx    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dLy_dx    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dLz_dx    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dlx_dx    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dly_dx    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dlz_dx    = np.zeros(ngrid+2*ngc)
+    cdef double[:] psi       = np.zeros(ngrid+2*ngc)
+    cdef double[:] Q1        = np.zeros(ngrid+2*ngc)
+    cdef double[:] Q2        = np.zeros(ngrid+2*ngc)
+    cdef double[:] Q3        = np.zeros(ngrid+2*ngc)
+    cdef double[:] dQ1_dpsi  = np.zeros(ngrid+2*ngc)
+    cdef double[:] dpsi_dx   = np.zeros(ngrid+2*ngc)
 
     # Cell interface gradients
-    cdef double[:] dLx_dx_L    = np.zeros(ngrid)
-    cdef double[:] dLx_dx_R    = np.zeros(ngrid)
-    cdef double[:] dLy_dx_L    = np.zeros(ngrid)
-    cdef double[:] dLy_dx_R    = np.zeros(ngrid)
-    cdef double[:] dLz_dx_L    = np.zeros(ngrid)
-    cdef double[:] dLz_dx_R    = np.zeros(ngrid)
-    cdef double[:] dlx_dx_L    = np.zeros(ngrid)
-    cdef double[:] dlx_dx_R    = np.zeros(ngrid)
-    cdef double[:] dly_dx_L    = np.zeros(ngrid)
-    cdef double[:] dly_dx_R    = np.zeros(ngrid)
-    cdef double[:] dlz_dx_L    = np.zeros(ngrid)
-    cdef double[:] dlz_dx_R    = np.zeros(ngrid)
-    cdef double[:] psi_L       = np.zeros(ngrid)
-    cdef double[:] psi_R       = np.zeros(ngrid)
-    cdef double[:] Q1_L        = np.zeros(ngrid)
-    cdef double[:] Q1_R        = np.zeros(ngrid)
-    cdef double[:] Q2_L        = np.zeros(ngrid)
-    cdef double[:] Q2_R        = np.zeros(ngrid)
-    cdef double[:] Q3_L        = np.zeros(ngrid)
-    cdef double[:] Q3_R        = np.zeros(ngrid)
-    cdef double[:] dQ1_dpsi_L  = np.zeros(ngrid)
-    cdef double[:] dQ1_dpsi_R  = np.zeros(ngrid)
-    cdef double[:] dpsi_dx_L   = np.zeros(ngrid)
-    cdef double[:] dpsi_dx_R   = np.zeros(ngrid)
-    cdef double[:] dQ1_dx_L  = np.zeros(ngrid)
-    cdef double[:] dQ1_dx_R  = np.zeros(ngrid)
+    cdef double[:] dLx_dx_L    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dLx_dx_R    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dLy_dx_L    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dLy_dx_R    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dLz_dx_L    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dLz_dx_R    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dlx_dx_L    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dlx_dx_R    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dly_dx_L    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dly_dx_R    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dlz_dx_L    = np.zeros(ngrid+2*ngc)
+    cdef double[:] dlz_dx_R    = np.zeros(ngrid+2*ngc)
+    cdef double[:] psi_L       = np.zeros(ngrid+2*ngc)
+    cdef double[:] psi_R       = np.zeros(ngrid+2*ngc)
+    cdef double[:] Q1_L        = np.zeros(ngrid+2*ngc)
+    cdef double[:] Q1_R        = np.zeros(ngrid+2*ngc)
+    cdef double[:] Q2_L        = np.zeros(ngrid+2*ngc)
+    cdef double[:] Q2_R        = np.zeros(ngrid+2*ngc)
+    cdef double[:] Q3_L        = np.zeros(ngrid+2*ngc)
+    cdef double[:] Q3_R        = np.zeros(ngrid+2*ngc)
+    cdef double[:] dQ1_dpsi_L  = np.zeros(ngrid+2*ngc)
+    cdef double[:] dQ1_dpsi_R  = np.zeros(ngrid+2*ngc)
+    cdef double[:] dpsi_dx_L   = np.zeros(ngrid+2*ngc)
+    cdef double[:] dpsi_dx_R   = np.zeros(ngrid+2*ngc)
+    cdef double[:] dQ1_dx_L  = np.zeros(ngrid+2*ngc)
+    cdef double[:] dQ1_dx_R  = np.zeros(ngrid+2*ngc)
 
     # Fluxes (interior cell interfaces only only)
-    cdef double[:] F_x       = np.zeros(ngrid-3)
-    cdef double[:] F_x_L     = np.zeros(ngrid-3)
-    cdef double[:] F_x_R     = np.zeros(ngrid-3)
-    cdef double[:] F_y       = np.zeros(ngrid-3)
-    cdef double[:] F_y_L     = np.zeros(ngrid-3)
-    cdef double[:] F_y_R     = np.zeros(ngrid-3)
-    cdef double[:] F_z       = np.zeros(ngrid-3)
-    cdef double[:] F_z_L     = np.zeros(ngrid-3)
-    cdef double[:] F_z_R     = np.zeros(ngrid-3)
-    cdef double[:,:] F_all   = np.zeros((3,ngrid-3))
+    cdef double[:] F_x       = np.zeros(ngrid+2*ngc-3)
+    cdef double[:] F_x_L     = np.zeros(ngrid+2*ngc-3)
+    cdef double[:] F_x_R     = np.zeros(ngrid+2*ngc-3)
+    cdef double[:] F_y       = np.zeros(ngrid+2*ngc-3)
+    cdef double[:] F_y_L     = np.zeros(ngrid+2*ngc-3)
+    cdef double[:] F_y_R     = np.zeros(ngrid+2*ngc-3)
+    cdef double[:] F_z       = np.zeros(ngrid+2*ngc-3)
+    cdef double[:] F_z_L     = np.zeros(ngrid+2*ngc-3)
+    cdef double[:] F_z_R     = np.zeros(ngrid+2*ngc-3)
+    cdef double[:,:] F_all   = np.zeros((3,ngrid+2*ngc-3))
 
     # miscellaneous variables
     cdef double Lx_tmp, Ly_tmp
@@ -368,9 +374,9 @@ def evolve(*p):
     cdef double velmax  = 0.5 # in fractions of the sound speed
     cdef double sigma_floor = 1e-3 * np.min(_sigma)
     cdef int i
-    cdef double[:] Lx_inf = _lda_vec[ngrid-2:ngrid,0]
-    cdef double[:] Ly_inf = _lda_vec[ngrid-2:ngrid,1]
-    cdef double[:] Lz_inf = _lda_vec[ngrid-2:ngrid,2]
+    cdef double[:] Lx_inf = _lda_vec[ngrid+2*ngc-2:ngrid+2*ngc,0]
+    cdef double[:] Ly_inf = _lda_vec[ngrid+2*ngc-2:ngrid+2*ngc,1]
+    cdef double[:] Lz_inf = _lda_vec[ngrid+2*ngc-2:ngrid+2*ngc,2]
     cdef double[:] Lx_old = _lda_vec[:,0] # Lx,Ly,Lz_old are for half saving variables during half time-step evolution
     cdef double[:] Ly_old = _lda_vec[:,1]
     cdef double[:] Lz_old = _lda_vec[:,2]
@@ -426,7 +432,7 @@ def evolve(*p):
     printf("Doing initial output...\n")
     sprintf(io_fn,"%s%d.csv",io_prefix,io_cnt)
     f_out = fopen(io_fn,"w")
-    for i in range(ngrid):
+    for i in range(ngrid+2*ngc):
         fprintf(f_out, "%e ", Lx[i])
         fprintf(f_out, "%e ", Ly[i])
         fprintf(f_out, "%e ", Lz[i])
@@ -446,7 +452,7 @@ def evolve(*p):
 
         ## During first iteration we have cell-centered, Lx,Ly,Lz,lx,ly,lz. We can use this to calculate most cell-interface values: 
         # Lx, Ly, Lz, dLx, dLy, dLz, dlx, dly, dlz, psi, Q1, Q2, Q3
-        for i in range(2,ngrid-2):
+        for i in range(2,ngrid+2*ngc-2):
             
             ## Linear reconstruction for Lx,Ly,Lz
             # Lx
@@ -536,7 +542,7 @@ def evolve(*p):
             ## cfl condition
             # Here, we do something qualitatively similar to Equation (50) of Diego Munoz 2012
             dt = 1000000000000000000.
-            for i in range(2,ngrid-2):
+            for i in range(2,ngrid+2*ngc-2):
 
                 # Can calculate dpsi_dx at the same time as CFL condition. 
                 dpsi_dx_L[i] = (psi_R[i]-psi_L[i-1])/2./dx # i-1/2
@@ -564,7 +570,7 @@ def evolve(*p):
             if (do_predictor): dt = dt/2. 
         else:
             # If we're using predictor-corrector time evolution, and we're on the "corrector" stage, we only need to calculate dpsi_dx here. 
-            for i in range(1,ngrid-1):
+            for i in range(1,ngrid+2*ngc-1):
                 dpsi_dx_L[i] = (psi_R[i]-psi_L[i-1])/2./dx # i-1/2
                 dpsi_dx_R[i] = (psi_R[i+1]-psi_L[i])/2./dx # i+1/2
                 dQ1_dx_L[i] = (Q1_R[i]-Q1_L[i-1])/2./dx # i-1/2
@@ -572,39 +578,39 @@ def evolve(*p):
 
 
         # for PLM, lets fill guard cells
-        apply_outflow(Lx_L,ngrid)
-        apply_outflow(Lx_R,ngrid)
-        apply_outflow(Ly_L,ngrid)
-        apply_outflow(Ly_R,ngrid)
-        apply_outflow(Lz_L,ngrid)
-        apply_outflow(Lz_R,ngrid)
-        apply_outflow(L_L,ngrid)
-        apply_outflow(L_R,ngrid)
-        apply_outflow(Q1_L,ngrid)
-        apply_outflow(Q1_R,ngrid)
+        apply_outflow(Lx_L,ngrid+2*ngc)
+        apply_outflow(Lx_R,ngrid+2*ngc)
+        apply_outflow(Ly_L,ngrid+2*ngc)
+        apply_outflow(Ly_R,ngrid+2*ngc)
+        apply_outflow(Lz_L,ngrid+2*ngc)
+        apply_outflow(Lz_R,ngrid+2*ngc)
+        apply_outflow(L_L,ngrid+2*ngc)
+        apply_outflow(L_R,ngrid+2*ngc)
+        apply_outflow(Q1_L,ngrid+2*ngc)
+        apply_outflow(Q1_R,ngrid+2*ngc)
 
         # Set gradients to zero in guard cells
-        apply_zero(dLx_dx_L,ngrid)
-        apply_zero(dLx_dx_R,ngrid)
-        apply_zero(dLy_dx_L,ngrid)
-        apply_zero(dLy_dx_R,ngrid)
-        apply_zero(dLz_dx_L,ngrid)
-        apply_zero(dLz_dx_R,ngrid)
-        apply_zero(Q2_L,ngrid)
-        apply_zero(Q2_R,ngrid)
-        apply_zero(Q3_L,ngrid)
-        apply_zero(Q3_R,ngrid)
-        apply_zero(dQ1_dpsi_L,ngrid)
-        apply_zero(dQ1_dpsi_R,ngrid)
-        apply_zero(psi_L,ngrid)
-        apply_zero(psi_R,ngrid)
-        apply_zero(dpsi_dx_L,ngrid)
-        apply_zero(dpsi_dx_R,ngrid)
-        apply_zero(dQ1_dx_L,ngrid)
-        apply_zero(dQ1_dx_R,ngrid)
+        apply_zero(dLx_dx_L,ngrid+2*ngc)
+        apply_zero(dLx_dx_R,ngrid+2*ngc)
+        apply_zero(dLy_dx_L,ngrid+2*ngc)
+        apply_zero(dLy_dx_R,ngrid+2*ngc)
+        apply_zero(dLz_dx_L,ngrid+2*ngc)
+        apply_zero(dLz_dx_R,ngrid+2*ngc)
+        apply_zero(Q2_L,ngrid+2*ngc)
+        apply_zero(Q2_R,ngrid+2*ngc)
+        apply_zero(Q3_L,ngrid+2*ngc)
+        apply_zero(Q3_R,ngrid+2*ngc)
+        apply_zero(dQ1_dpsi_L,ngrid+2*ngc)
+        apply_zero(dQ1_dpsi_R,ngrid+2*ngc)
+        apply_zero(psi_L,ngrid+2*ngc)
+        apply_zero(psi_R,ngrid+2*ngc)
+        apply_zero(dpsi_dx_L,ngrid+2*ngc)
+        apply_zero(dpsi_dx_R,ngrid+2*ngc)
+        apply_zero(dQ1_dx_L,ngrid+2*ngc)
+        apply_zero(dQ1_dx_R,ngrid+2*ngc)
 
         ## evolve (get fluxes)
-        for i in range(ngrid-3):
+        for i in range(ngrid+2*ngc-3):
 
             ## Left side of fluxes at cell interfaces
 
@@ -718,20 +724,22 @@ def evolve(*p):
                 F_z[i] = F_z_R[i]
 
         # Check to make sure flux doesn't re-enter grid after it's copied out
-        F_x[0] = fmin(0.,F_x[0])
+        '''F_x[0] = fmin(0.,F_x[0])
         F_y[0] = fmin(0.,F_y[0])
         F_z[0] = fmin(0.,F_z[0])
-        F_x[ngrid-4] = fmax(0.,F_x[ngrid-4])
-        F_y[ngrid-4] = fmax(0.,F_y[ngrid-4])
-        F_z[ngrid-4] = fmax(0.,F_z[ngrid-4])
+        if(bc_type!=3): # If disk is infinite, dont do this step, we want mass to flow in if disk is infinite
+            F_x[ngrid+2*ngc-4] = fmax(0.,F_x[ngrid+2*ngc-4])
+            F_y[ngrid+2*ngc-4] = fmax(0.,F_y[ngrid+2*ngc-4])
+            F_z[ngrid+2*ngc-4] = fmax(0.,F_z[ngrid+2*ngc-4])
+        '''
 
         ## update
-        for i in range(2,ngrid-2):
+        for i in range(2,ngrid+2*ngc-2):
             Lx[i] = Lx_old[i] - (dt/dx)*(F_x[i-1] - F_x[i-2]) * r[i]**(-1.5)
             Ly[i] = Ly_old[i] - (dt/dx)*(F_y[i-1] - F_y[i-2]) * r[i]**(-1.5)
             Lz[i] = Lz_old[i] - (dt/dx)*(F_z[i-1] - F_z[i-2]) * r[i]**(-1.5)
 
-        for i in range(ngrid):
+        for i in range(ngrid+2*ngc):
             ## Update external torques
             Lx_tmp = Lx_old[i]*cos(omega_p_z[i]*dt) - Ly_old[i]*sin(omega_p_z[i]*dt)
             Ly_tmp = Lx_old[i]*sin(omega_p_z[i]*dt) + Ly_old[i]*cos(omega_p_z[i]*dt)
@@ -761,89 +769,89 @@ def evolve(*p):
             ## Lx
             Lx[0] = 1e-10 * Lx[2]*(r[2]/r[0])**(-1.)
             Lx[1] = 1e-10 * Lx[2]*(r[2]/r[1])**(-1.)
-            Lx[ngrid-1] = 1e-10 * Lx[ngrid-3]*(r[ngrid-3]/r[ngrid-1])**(-1.)
-            Lx[ngrid-2] = 1e-10 * Lx[ngrid-3]*(r[ngrid-3]/r[ngrid-2])**(-1.)
+            Lx[ngrid+2*ngc-1] = 1e-10 * Lx[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-1])**(-1.)
+            Lx[ngrid+2*ngc-2] = 1e-10 * Lx[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-2])**(-1.)
             ## Ly
             Ly[0] = 1e-10 * Ly[2]*(r[2]/r[0])**(-1.)
             Ly[1] = 1e-10 * Ly[2]*(r[2]/r[1])**(-1.)
-            Ly[ngrid-1] = 1e-10 * Ly[ngrid-3]*(r[ngrid-3]/r[ngrid-1])**(-1.)
-            Ly[ngrid-2] = 1e-10 * Ly[ngrid-3]*(r[ngrid-3]/r[ngrid-2])**(-1.)
+            Ly[ngrid+2*ngc-1] = 1e-10 * Ly[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-1])**(-1.)
+            Ly[ngrid+2*ngc-2] = 1e-10 * Ly[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-2])**(-1.)
             ## Lz
             Lz[0] = 1e-10 * Lz[2]*(r[2]/r[0])**(-1.)
             Lz[1] = 1e-10 * Lz[2]*(r[2]/r[1])**(-1.)
-            Lz[ngrid-1] = 1e-10 * Lz[ngrid-3]*(r[ngrid-3]/r[ngrid-1])**(-1.)
-            Lz[ngrid-2] = 1e-10 * Lz[ngrid-3]*(r[ngrid-3]/r[ngrid-2])**(-1.)
+            Lz[ngrid+2*ngc-1] = 1e-10 * Lz[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-1])**(-1.)
+            Lz[ngrid+2*ngc-2] = 1e-10 * Lz[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-2])**(-1.)
             ## L
             L[0]  = (Lx[0]**2. + Ly[0]**2. + Lz[0]**2.)**0.5
             L[1]  = (Lx[1]**2. + Ly[1]**2. + Lz[1]**2.)**0.5
-            L[ngrid-1]  = (Lx[ngrid-1]**2. + Ly[ngrid-1]**2. + Lz[ngrid-1]**2.)**0.5
-            L[ngrid-2]  = (Lx[ngrid-2]**2. + Ly[ngrid-2]**2. + Lz[ngrid-2]**2.)**0.5
+            L[ngrid+2*ngc-1]  = (Lx[ngrid+2*ngc-1]**2. + Ly[ngrid+2*ngc-1]**2. + Lz[ngrid+2*ngc-1]**2.)**0.5
+            L[ngrid+2*ngc-2]  = (Lx[ngrid+2*ngc-2]**2. + Ly[ngrid+2*ngc-2]**2. + Lz[ngrid+2*ngc-2]**2.)**0.5
 
         elif (bc_type==1): #### Apply outflow boundary conditions
             ## Lx
             Lx[0] = Lx[2]*(r[2]/r[0])**(-1.)
             Lx[1] = Lx[2]*(r[2]/r[1])**(-1.)
-            Lx[ngrid-1] = Lx[ngrid-3]*(r[ngrid-3]/r[ngrid-1])**(-1.)
-            Lx[ngrid-2] = Lx[ngrid-3]*(r[ngrid-3]/r[ngrid-2])**(-1.)
+            Lx[ngrid+2*ngc-1] = Lx[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-1])**(-1.)
+            Lx[ngrid+2*ngc-2] = Lx[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-2])**(-1.)
             ## Ly
             Ly[0] = Ly[2]*(r[2]/r[0])**(-1.)
             Ly[1] = Ly[2]*(r[2]/r[1])**(-1.)
-            Ly[ngrid-1] = Ly[ngrid-3]*(r[ngrid-3]/r[ngrid-1])**(-1.)
-            Ly[ngrid-2] = Ly[ngrid-3]*(r[ngrid-3]/r[ngrid-2])**(-1.)
+            Ly[ngrid+2*ngc-1] = Ly[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-1])**(-1.)
+            Ly[ngrid+2*ngc-2] = Ly[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-2])**(-1.)
             ## Lz
             Lz[0] = Lz[2]*(r[2]/r[0])**(-1.)
             Lz[1] = Lz[2]*(r[2]/r[1])**(-1.)
-            Lz[ngrid-1] = Lz[ngrid-3]*(r[ngrid-3]/r[ngrid-1])**(-1.)
-            Lz[ngrid-2] = Lz[ngrid-3]*(r[ngrid-3]/r[ngrid-2])**(-1.)
+            Lz[ngrid+2*ngc-1] = Lz[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-1])**(-1.)
+            Lz[ngrid+2*ngc-2] = Lz[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-2])**(-1.)
             ## L
             L[0]  = (Lx[0]**2. + Ly[0]**2. + Lz[0]**2.)**0.5
             L[1]  = (Lx[1]**2. + Ly[1]**2. + Lz[1]**2.)**0.5
-            L[ngrid-1]  = (Lx[ngrid-1]**2. + Ly[ngrid-1]**2. + Lz[ngrid-1]**2.)**0.5
-            L[ngrid-2]  = (Lx[ngrid-2]**2. + Ly[ngrid-2]**2. + Lz[ngrid-2]**2.)**0.5
+            L[ngrid+2*ngc-1]  = (Lx[ngrid+2*ngc-1]**2. + Ly[ngrid+2*ngc-1]**2. + Lz[ngrid+2*ngc-1]**2.)**0.5
+            L[ngrid+2*ngc-2]  = (Lx[ngrid+2*ngc-2]**2. + Ly[ngrid+2*ngc-2]**2. + Lz[ngrid+2*ngc-2]**2.)**0.5
 
         elif (bc_type==2): #### Apply outflow outer and sink inner boundary conditions
             ## Lx
             Lx[0] = 1e-10 * Lx[2]*(r[2]/r[0])**(-1.)
             Lx[1] = Lx[2]*(r[2]/r[1])**(-1.)
-            Lx[ngrid-1] = Lx[ngrid-3]*(r[ngrid-3]/r[ngrid-1])**(-1.)
-            Lx[ngrid-2] = Lx[ngrid-3]*(r[ngrid-3]/r[ngrid-2])**(-1.)
+            Lx[ngrid+2*ngc-1] = Lx[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-1])**(-1.)
+            Lx[ngrid+2*ngc-2] = Lx[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-2])**(-1.)
             ## Ly
             Ly[0] = 1e-10 * Ly[2]*(r[2]/r[0])**(-1.)
             Ly[1] = Ly[2]*(r[2]/r[1])**(-1.)
-            Ly[ngrid-1] = Ly[ngrid-3]*(r[ngrid-3]/r[ngrid-1])**(-1.)
-            Ly[ngrid-2] = Ly[ngrid-3]*(r[ngrid-3]/r[ngrid-2])**(-1.)
+            Ly[ngrid+2*ngc-1] = Ly[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-1])**(-1.)
+            Ly[ngrid+2*ngc-2] = Ly[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-2])**(-1.)
             ## Lz
             Lz[0] = 1e-10 * Lz[2]*(r[2]/r[0])**(-1.)
             Lz[1] = Lz[2]*(r[2]/r[1])**(-1.)
-            Lz[ngrid-1] = Lz[ngrid-3]*(r[ngrid-3]/r[ngrid-1])**(-1.)
-            Lz[ngrid-2] = Lz[ngrid-3]*(r[ngrid-3]/r[ngrid-2])**(-1.)
+            Lz[ngrid+2*ngc-1] = Lz[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-1])**(-1.)
+            Lz[ngrid+2*ngc-2] = Lz[ngrid+2*ngc-3]*(r[ngrid+2*ngc-3]/r[ngrid+2*ngc-2])**(-1.)
             ## L
             L[0]  = (Lx[0]**2. + Ly[0]**2. + Lz[0]**2.)**0.5
             L[1]  = (Lx[1]**2. + Ly[1]**2. + Lz[1]**2.)**0.5
-            L[ngrid-1]  = (Lx[ngrid-1]**2. + Ly[ngrid-1]**2. + Lz[ngrid-1]**2.)**0.5
-            L[ngrid-2]  = (Lx[ngrid-2]**2. + Ly[ngrid-2]**2. + Lz[ngrid-2]**2.)**0.5
+            L[ngrid+2*ngc-1]  = (Lx[ngrid+2*ngc-1]**2. + Ly[ngrid+2*ngc-1]**2. + Lz[ngrid+2*ngc-1]**2.)**0.5
+            L[ngrid+2*ngc-2]  = (Lx[ngrid+2*ngc-2]**2. + Ly[ngrid+2*ngc-2]**2. + Lz[ngrid+2*ngc-2]**2.)**0.5
 
         elif (bc_type==3): #### Infinite disk
             ## Lx
             Lx[0] = Lx[2]*(r[2]/r[0])**(-1.)
             Lx[1] = Lx[2]*(r[2]/r[1])**(-1.)
-            Lx[ngrid-1] = Lx_inf[1] 
-            Lx[ngrid-2] = Lx_inf[0]
+            Lx[ngrid+2*ngc-1] = Lx_inf[1] 
+            Lx[ngrid+2*ngc-2] = Lx_inf[0]
             ## Ly
             Ly[0] = Ly[2]*(r[2]/r[0])**(-1.)
             Ly[1] = Ly[2]*(r[2]/r[1])**(-1.)
-            Ly[ngrid-1] = Ly_inf[1]
-            Ly[ngrid-2] = Ly_inf[0]
+            Ly[ngrid+2*ngc-1] = Ly_inf[1]
+            Ly[ngrid+2*ngc-2] = Ly_inf[0]
             ## Lz
             Lz[0] = Lz[2]*(r[2]/r[0])**(-1.)
             Lz[1] = Lz[2]*(r[2]/r[1])**(-1.)
-            Lz[ngrid-1] = Lz_inf[1]
-            Lz[ngrid-2] = Lz_inf[0]
+            Lz[ngrid+2*ngc-1] = Lz_inf[1]
+            Lz[ngrid+2*ngc-2] = Lz_inf[0]
             ## L
             L[0]  = (Lx[0]**2. + Ly[0]**2. + Lz[0]**2.)**0.5
             L[1]  = (Lx[1]**2. + Ly[1]**2. + Lz[1]**2.)**0.5
-            L[ngrid-1]  = (Lx[ngrid-1]**2. + Ly[ngrid-1]**2. + Lz[ngrid-1]**2.)**0.5
-            L[ngrid-2]  = (Lx[ngrid-2]**2. + Ly[ngrid-2]**2. + Lz[ngrid-2]**2.)**0.5
+            L[ngrid+2*ngc-1]  = (Lx[ngrid+2*ngc-1]**2. + Ly[ngrid+2*ngc-1]**2. + Lz[ngrid+2*ngc-1]**2.)**0.5
+            L[ngrid+2*ngc-2]  = (Lx[ngrid+2*ngc-2]**2. + Ly[ngrid+2*ngc-2]**2. + Lz[ngrid+2*ngc-2]**2.)**0.5
 
 
         if (predictor and do_predictor):
@@ -866,7 +874,7 @@ def evolve(*p):
                 sprintf(io_fn,"%s%d.csv",io_prefix,io_cnt)
 
                 f_out = fopen(io_fn,"w")
-                for i in range(ngrid):
+                for i in range(ngrid+2*ngc):
                     fprintf(f_out, "%e ", Lx[i])
                     fprintf(f_out, "%e ", Ly[i])
                     fprintf(f_out, "%e ", Lz[i])
@@ -883,7 +891,7 @@ def evolve(*p):
     printf("Doing final output...\n")
     sprintf(io_fn,"%s%d.csv",io_prefix,io_cnt)
     f_out = fopen(io_fn,"w")
-    for i in range(ngrid):
+    for i in range(ngrid+2*ngc):
         fprintf(f_out, "%e ", Lx[i])
         fprintf(f_out, "%e ", Ly[i])
         fprintf(f_out, "%e ", Lz[i])
