@@ -36,7 +36,6 @@ for pref in prefixes:
         exit()
     first = np.min(tmp_fileno_list)
     last  = np.max(tmp_fileno_list)
-    if pref == prefixes[-1]: time_length = np.size(tmp_fileno_list) # number of outputs for reference simulation
     ##
 
     filenames = get_fn_list(path_to_data,first,last)
@@ -45,29 +44,119 @@ for pref in prefixes:
         print "Loading file %d..." % i
         tmp_data.append(build_table(fn,HoR))
     data_dict[pref] = tmp_data
+    
 
-reference_time_array = []
-for i in range(time_length):
-    reference_time_array.append(data_dict[prefixes[-1]][i]["t"][0])
-reference_time_array = np.array(reference_time_array)
+## Code to visualize data
+def plot_interface_multi(table,prefixes,time_ind):
+    fig, ax = plt.subplots(3,2,figsize=(20,24))
+
+    for i,f in enumerate(prefixes):
+        plot_r  = table[f][time_ind]["r"]
+        plot_d  = table[f][time_ind]["sigma"]
+        plot_Lx = table[f][time_ind]["Lx"]
+        plot_Ly = table[f][time_ind]["Ly"]
+        plot_Lz = table[f][time_ind]["Lz"]
+        plot_t  = table[f][time_ind]["tilt"]
+        plot_p  = table[f][time_ind]["prec"]
+
+        time   = table[f][time_ind]["t"][0]
+        rmin = np.min(plot_r)
+        rmax = np.max(plot_r)
+        print "simulaton %s at time %e r_g/c" % (f,time)
+
+        ax[0][0].plot(plot_r,plot_t,label=f)
+        ax[0][0].set_xlabel(r'$r\,[r_{\rm g}]$')
+        ax[0][0].set_ylabel(r'$T\,[{\rm deg}]$')
+        #ax[0][0].set_ylim(0,2)
+        ax[0][0].set_xlim(rmin,rmax)
+        ax[0][0].set_xscale('log')
+        ax[0][0].legend(frameon=False,ncol=len(prefixes))#,fontsize='x-small')
+
+        ax[1][0].plot(plot_r,plot_p,label=f)
+        ax[1][0].set_xlabel(r'$r\,[r_{\rm g}]$')
+        ax[1][0].set_ylabel(r'$P\,[{\rm deg}]$')
+        #ax[1][0].set_ylim(-1e-4,1e-4)
+        ax[1][0].set_xlim(rmin,rmax)
+        ax[1][0].set_xscale('log')
+        #ax[1][0].legend(frameon=False)
+
+        ax[2][0].plot(plot_r,plot_d,label=f)
+        ax[2][0].set_xlabel(r'$r\,[r_{\rm g}]$')
+        ax[2][0].set_ylabel(r'$\Sigma$')
+        #ax[2][0].set_ylim(-1e-4,1e-4)
+        ax[2][0].set_xlim(rmin,rmax)
+        ax[2][0].set_xscale('log')
+        ax[2][0].set_yscale('log')
+        #ax[2][0].legend(frameon=False)
+
+        ax[0][1].plot(plot_r,plot_Lx,label=f)
+        ax[0][1].set_xlabel(r'$r\,[r_{\rm g}]$')
+        ax[0][1].set_ylabel(r'$\Lambda_x$')
+        #ax[0][1].set_ylim(0,50000)
+        ax[0][1].set_xlim(rmin,rmax)
+        ax[0][1].set_xscale('log')
+        #ax[0][1].legend(frameon=False)
+        #ax[0][1].set_yscale('log')
+
+        ax[1][1].plot(plot_r,plot_Ly,label=f)
+        ax[1][1].set_xlabel(r'$r\,[r_{\rm g}]$')
+        ax[1][1].set_ylabel(r'$\Lambda_y$')
+        #ax[1][1].set_ylim(-50,1)
+        ax[1][1].set_xlim(rmin,rmax)
+        ax[1][1].set_xscale('log')
+        #ax[1][1].legend(frameon=False)
+
+        ax[2][1].plot(plot_r,plot_Lz,label=f)
+        ax[2][1].set_xlabel(r'$r\,[r_{\rm g}]$')
+        ax[2][1].set_ylabel(r'$\Lambda_z$')
+        #ax[2][1].set_ylim(-1e-3,1e-3)
+        ax[2][1].set_xlim(rmin,rmax)
+        ax[2][1].set_xscale('log')
+        #ax[2][1].legend(frameon=False)
+
+        
+    #plt.tight_layout(pad=10.0,w_pad=8.0,h_pad=20.0)
+    return fig
+fig = plot_interface_multi(data_dict,prefixes,-1)
+
+if 1:
+    plt.savefig(path+'/convergence_autofig.pdf')
+plt.clf()
+##
+
+## Code to build convergence plots
+def map_cell_volume(x,field,xmin,xmax):
+    dx_base  = xmax - xmin
+    dx_high  = np.abs(x[1]-x[0])
+    lower_index = np.argmin(np.abs(x-xmin))
+    upper_index = np.argmin(np.abs(x-xmax))
+    num_cells = upper_index - lower_index + 1
+    if (num_cells==1):
+        cell_volume = field[lower_index]*dx_high
+    if (num_cells>=2):
+        x_lower_right = x[lower_index] + dx_high/2.
+        W_lower = (x_lower_right - xmin)/dx_base
+        x_upper_left  = x[upper_index] - dx_high/2.
+        W_upper = (dx_high - (xmax - x_upper_left))/dx_base
+        cell_volume = field[lower_index]*W_lower*dx_base + field[upper_index]*W_upper*dx_base
+        for i in range(lower_index+1,upper_index): # does nothing if num_cells == 2
+            cell_volume += field[i]*dx_high
+    return cell_volume
 
 time_index = -1
 
 xs = [] # For each simulation, this is the log(r) array
 fs = [] # For each simulation, this is the field array
 ns = [] # For each simulation, this is the number of cells
-ts = [] # For each simulation, this is the time at which nmax steps was reached
 dxs = [] # For each simulation, this is the cell width
 for i,f in enumerate(prefixes):
     print "\nUnpacking simulation %s at time %e r_g/c\n" % (f,data_dict[f][time_index]["t"][0])
-    ts.append(data_dict[f][time_index]["t"][0])
     xs.append(np.log(data_dict[f][time_index]["r"])) # Take log to convert to internal coordinates
     fs.append(data_dict[f][time_index]["Lz"])        # We can test convergence for Lx, Ly or Lz
     ns.append(len(data_dict[f][time_index]["Lx"]))
     dx = np.average(xs[i][1:]-xs[i][:-1])
     #print "dx = ", dx, "example dx = ", xs[i][1]-xs[i][0], " (should be equal!) "
     dxs.append(dx)
-ts = np.array(ts)
 xs = np.array(xs)
 fs = np.array(fs)
 ns = np.array(ns)
@@ -75,13 +164,11 @@ dxs = np.array(dxs)
 
 sol_x = np.copy(xs[-1])
 sol_dx = np.average(sol_x[1:]-sol_x[:-1])
-#sol_f = np.copy(fs[-1])
+sol_f = np.copy(fs[-1])
 
 # S will contain our errors
 S = np.zeros(len(prefixes))
 for run in range(len(prefixes[:-1])):
-    current_time_index = np.argmin(np.abs(ts[run]-reference_time_array))
-    sol_f = np.copy(data_dict[prefixes[-1]][current_time_index]["Lz"])
     norm = 0.
     for i in range(2,ns[run]-2):
         sol_cell_index = np.argmin(np.abs(sol_x-xs[run][i]))

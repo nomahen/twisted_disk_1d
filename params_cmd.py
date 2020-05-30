@@ -14,22 +14,22 @@ io_prefix = args.file
 alpha    = 0.2      # alpha viscosity [HoR < alpha < 1]
 gamma    = 1.0      # adiabatic index [1. < gamma < 5./3.]
 HoR      = 1e-3     # disk scale height [HoR < alpha < 1]
-tilt     = 45.      # initial disk tilt [degrees; 0 < tilt < 90]
-bhspin   = 1.      # black hole spin [0 < bhspin < 1]
-r0       = 100.     # midpoint of density distribution [r_g; rmin < r0 < rmax]
-rw       = 60.      # Gaussian width of density distribution [r_g; rw > 0]
+tilt     = 0.      # initial disk tilt [degrees; 0 < tilt < 90]
+bhspin   = 0.      # black hole spin [0 < bhspin < 1]
+r0       = 600.     # midpoint of density distribution [r_g; rmin < r0 < rmax]
+rw       = 100.      # Gaussian width of density distribution [r_g; rw > 0]
 rmin     = 100.0     # Inner radius of disk [r_g]
 rmax     = 1000.0   # Outer radius of disk [r_g]
-rho_type = "flat"   # Type of density distribution ["gauss" or "flat"]
+rho_type = "gauss"   # Type of density distribution ["gauss" or "flat"]
 
 # Numerical parameters
-tmax    = 0.0001   # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
+tmax    = 1e-6   # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
 cfl     = 0.8   # Courant-Friedrichs-Lewy number
 #ngrid   = 300    # num grid points
-bc      = "infinite"  # boundary condition ["sink" or "outflow" or "mix" or "infinite"]
+bc      = "outflow"  # boundary condition ["sink" or "outflow" or "mix" or "infinite"]
 
 # Output
-io_freq   = 1e-5             # Frequency
+io_freq   = 1e-7             # Frequency
 #io_prefix = "./outputs/output_" # prefix for output files
 
 # Q1, Q2, Q3
