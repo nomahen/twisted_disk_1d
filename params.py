@@ -19,7 +19,7 @@ ngrid   = 300    # num grid points
 bc      = "periodic"  # boundary condition ["sink" or "outflow" or "mix" or "infinite"]
 
 # Output
-io_freq   = 1e-8             # Frequency
+io_freq   = 1e-2             # Frequency
 io_prefix = "./outputs/output_" # prefix for output files
 
 # Q1, Q2, Q3
@@ -30,9 +30,15 @@ Q1_path = "./tables/Q1_1d_a0.2_p0.0_g1.0_np30_ng10000.txt"
 Q2_path = "./tables/Q2_1d_a0.2_p0.0_g1.0_np30_ng10000.txt"
 Q3_path = "./tables/Q3_1d_a0.2_p0.0_g1.0_np30_ng10000.txt"
 
+### for test problems
+eq_type     = 0 # 0 for heat equation, 1 for linear advection equation
+space_order = 1 # 1 or 2. For heat equation, does nothing, since central differencing is automatically 2nd order. 
+time_order  = 1 # 1 or 2. 1: Forward Euler; 2: RK2/Predictor-Corrector (Midpoint Method) (General class is RK2/Predictor-Corrector, Midpoint Method gives coefficients of RK2 class)
+which_problem = "pulse" # "pulse", "periodic_sine", "discontinuity", "steady"    
+
 #### package all params to send to evolve
 import time
 from evolve_fvm import *
 t1 = time.time()
-evolve(alpha,gamma,HoR,tilt,bhspin,r0,rw,rmin,rmax,rho_type,tmax,cfl,ngrid,bc,io_freq,io_prefix,Q_dim,smax,rmax_Q,Q1_path,Q2_path,Q3_path)
+evolve(alpha,gamma,HoR,tilt,bhspin,r0,rw,rmin,rmax,rho_type,tmax,cfl,ngrid,bc,io_freq,io_prefix,Q_dim,smax,rmax_Q,Q1_path,Q2_path,Q3_path,space_order,time_order,eq_type,which_problem)
 print "time in seconds: ", time.time() - t1

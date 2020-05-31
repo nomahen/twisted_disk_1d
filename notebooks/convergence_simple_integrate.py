@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 from read_data import *
 import argparse
 import glob
+from scipy.interpolate import interp1d
+from scipy.integrate import quad
+
 p = argparse.ArgumentParser()
 p.add_argument('-g',"--grid_list",dest="grid_list",type=str,default='50,100,200', help="Comma separated string of grids.")
 p.add_argument('-p',"--path",dest="path",type=str,default="./outputs", help="Path where ./n50, ./n100, etc... are located")
@@ -45,86 +48,26 @@ for pref in prefixes:
         tmp_data.append(build_table(fn,HoR))
     data_dict[pref] = tmp_data
     
+# get final snapshot
+time_index = -1
 
 ## Code to visualize data
-def plot_interface_multi(table,prefixes,time_ind):
-    fig, ax = plt.subplots(3,2,figsize=(20,24))
+fig,ax = plt.subplots(1,2,figsize=(10,4))
 
-    for i,f in enumerate(prefixes):
-        plot_r  = table[f][time_ind]["r"]
-        plot_d  = table[f][time_ind]["sigma"]
-        plot_Lx = table[f][time_ind]["Lx"]
-        plot_Ly = table[f][time_ind]["Ly"]
-        plot_Lz = table[f][time_ind]["Lz"]
-        plot_t  = table[f][time_ind]["tilt"]
-        plot_p  = table[f][time_ind]["prec"]
+for i,f in enumerate(prefixes):
+    plot_r  = data_dict[f][time_index]["r"]
+    plot_Lz = data_dict[f][time_index]["Lz"]
 
-        time   = table[f][time_ind]["t"][0]
-        rmin = np.min(plot_r)
-        rmax = np.max(plot_r)
-        print "simulaton %s at time %e r_g/c" % (f,time)
+    time   = data_dict[f][time_index]["t"][0]
+    rmin = np.min(plot_r)
+    rmax = np.max(plot_r)
+    print "simulaton %s at time %e" % (f,time)
 
-        ax[0][0].plot(plot_r,plot_t,label=f)
-        ax[0][0].set_xlabel(r'$r\,[r_{\rm g}]$')
-        ax[0][0].set_ylabel(r'$T\,[{\rm deg}]$')
-        #ax[0][0].set_ylim(0,2)
-        ax[0][0].set_xlim(rmin,rmax)
-        ax[0][0].set_xscale('log')
-        ax[0][0].legend(frameon=False,ncol=len(prefixes))#,fontsize='x-small')
+    ax[0].plot(plot_r,plot_Lz,label=f,ls='--')
+    ax[0].set_xlabel(r'$x$')
+    ax[0].set_ylabel(r'$\Lambda_z$')
+    ax[0].set_xlim(rmin,rmax)
 
-        ax[1][0].plot(plot_r,plot_p,label=f)
-        ax[1][0].set_xlabel(r'$r\,[r_{\rm g}]$')
-        ax[1][0].set_ylabel(r'$P\,[{\rm deg}]$')
-        #ax[1][0].set_ylim(-1e-4,1e-4)
-        ax[1][0].set_xlim(rmin,rmax)
-        ax[1][0].set_xscale('log')
-        #ax[1][0].legend(frameon=False)
-
-        ax[2][0].plot(plot_r,plot_d,label=f)
-        ax[2][0].set_xlabel(r'$r\,[r_{\rm g}]$')
-        ax[2][0].set_ylabel(r'$\Sigma$')
-        #ax[2][0].set_ylim(-1e-4,1e-4)
-        ax[2][0].set_xlim(rmin,rmax)
-        ax[2][0].set_xscale('log')
-        ax[2][0].set_yscale('log')
-        #ax[2][0].legend(frameon=False)
-
-        ax[0][1].plot(plot_r,plot_Lx,label=f)
-        ax[0][1].set_xlabel(r'$r\,[r_{\rm g}]$')
-        ax[0][1].set_ylabel(r'$\Lambda_x$')
-        #ax[0][1].set_ylim(0,50000)
-        ax[0][1].set_xlim(rmin,rmax)
-        ax[0][1].set_xscale('log')
-        #ax[0][1].legend(frameon=False)
-        #ax[0][1].set_yscale('log')
-
-        ax[1][1].plot(plot_r,plot_Ly,label=f)
-        ax[1][1].set_xlabel(r'$r\,[r_{\rm g}]$')
-        ax[1][1].set_ylabel(r'$\Lambda_y$')
-        #ax[1][1].set_ylim(-50,1)
-        ax[1][1].set_xlim(rmin,rmax)
-        ax[1][1].set_xscale('log')
-        #ax[1][1].legend(frameon=False)
-
-        ax[2][1].plot(plot_r,plot_Lz,label=f)
-        ax[2][1].set_xlabel(r'$r\,[r_{\rm g}]$')
-        ax[2][1].set_ylabel(r'$\Lambda_z$')
-        #ax[2][1].set_ylim(-1e-3,1e-3)
-        ax[2][1].set_xlim(rmin,rmax)
-        ax[2][1].set_xscale('log')
-        #ax[2][1].legend(frameon=False)
-
-        
-    #plt.tight_layout(pad=10.0,w_pad=8.0,h_pad=20.0)
-    return fig
-fig = plot_interface_multi(data_dict,prefixes,-1)
-
-if 1:
-    plt.savefig(path+'/convergence_autofig.pdf')
-plt.clf()
-##
-
-## Code to build convergence plots
 def map_cell_volume(x,field,xmin,xmax):
     dx_base  = xmax - xmin
     dx_high  = np.abs(x[1]-x[0])
@@ -143,7 +86,6 @@ def map_cell_volume(x,field,xmin,xmax):
             cell_volume += field[i]*dx_high
     return cell_volume
 
-time_index = -1
 
 xs = [] # For each simulation, this is the log(r) array
 fs = [] # For each simulation, this is the field array
@@ -151,30 +93,41 @@ ns = [] # For each simulation, this is the number of cells
 dxs = [] # For each simulation, this is the cell width
 for i,f in enumerate(prefixes):
     print "\nUnpacking simulation %s at time %e r_g/c\n" % (f,data_dict[f][time_index]["t"][0])
-    xs.append(np.log(data_dict[f][time_index]["r"])) # Take log to convert to internal coordinates
+    xs.append(data_dict[f][time_index]["r"]) # Take log to convert to internal coordinates
     fs.append(data_dict[f][time_index]["Lz"])        # We can test convergence for Lx, Ly or Lz
     ns.append(len(data_dict[f][time_index]["Lx"]))
     dx = np.average(xs[i][1:]-xs[i][:-1])
-    #print "dx = ", dx, "example dx = ", xs[i][1]-xs[i][0], " (should be equal!) "
     dxs.append(dx)
 xs = np.array(xs)
 fs = np.array(fs)
 ns = np.array(ns)
 dxs = np.array(dxs)
 
-sol_x = np.copy(xs[-1])
-sol_dx = np.average(sol_x[1:]-sol_x[:-1])
-sol_f = np.copy(fs[-1])
+ref_x  = np.copy(xs[0])
+ref_dx = np.average(ref_x[1:]-ref_x[:-1])
+ref_f  = np.copy(fs[0]) 
+
+# Lets integrate the total code volume within each cell of the lowest resolution grid
+num_pts_ref = len(ref_x)
+sols = []
+for run in range(len(prefixes)):
+    sol = np.zeros(num_pts_ref-4) # dont include guard cells (4 = 2 on each side)
+    # function for piecewise function data
+    data_pc = interp1d(xs[run],fs[run], kind="nearest")
+    for i in range(2,num_pts_ref-2):
+        cell_xmin = ref_x[i] - ref_dx/2.
+        cell_xmax = ref_x[i] + ref_dx/2.
+        #new_cell_volume = map_cell_volume(xs[run],fs[run],cell_xmin,cell_xmax)
+        sol[i-2] = quad(data_pc,cell_xmin,cell_xmax)[0]#new_cell_volume
+    sols.append(sol)
+
 
 # S will contain our errors
 S = np.zeros(len(prefixes))
 for run in range(len(prefixes[:-1])):
     norm = 0.
-    for i in range(2,ns[run]-2):
-        sol_cell_index = np.argmin(np.abs(sol_x-xs[run][i]))
-        #print "x at cell = ", xs[run][i], "x at master = ", sol_x[sol_cell_index]
-        norm += dxs[run]*np.abs(fs[run][i]-sol_f[sol_cell_index])
-    S[run] = np.abs(np.copy(norm))
+    for i in range(num_pts_ref-4):
+        S[run] += np.abs(sols[run][i] - sols[-1][i])
 
 print "\n## Calculated error ##"
 print "log S        = ", np.log(S)
@@ -207,20 +160,19 @@ plot_y = fit(plot_x)
 # Switch from logspace to log2 space so simulations will be evenly spaced
 plot_x = np.log2(np.exp(plot_x))
 fit_x  = np.log2(np.exp(fit_x))
-print 2**fit_x, fit_x
 
 # Now plot!
-plt.plot(plot_x,plot_y,color='peru')
-plt.scatter(fit_x,fit_y,color='black',s=20,zorder=3)
-plt.xlim(fit_x[0] - 1, fit_x[-1] + 1)
-plt.xlabel(r'${\rm log}_2n_{\rm grid}$')
-plt.ylabel(r'${\rm log}_2S$')
-plt.title(r"$L_1 = %5.4fn_{\rm grid}^{%3.2f}$" % (np.exp(b),m))
-#plt.tight_layout()
+ax[1].plot(plot_x,plot_y,color='peru')
+ax[1].scatter(fit_x,fit_y,color='black',s=20,zorder=3)
+ax[1].set_xlim(fit_x[0] - 1, fit_x[-1] + 1)
+ax[1].set_xlabel(r'${\rm log}_2n_{\rm grid}$')
+ax[1].set_ylabel(r'${\rm log}_2S$')
+
+fig.suptitle(r"$L_1 = %5.4fn_{\rm grid}^{%3.2f}$" % (np.exp(b),m))
 
 # Save figure
 if 1:
-    plt.savefig(path + "/convergence_autofit.pdf")
+    plt.savefig(path + "/convergence_autofit_integrated.pdf")
 
 
 ##
