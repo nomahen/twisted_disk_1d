@@ -1,8 +1,8 @@
 #!/bin/bash
 
-gridsizes=( 50 100 200 400 800 1600)
+gridsizes=(16 32 64 128 256 512 1024)
 gridlist=""
-prefix="./outputs/convergence_tests/tilt45_infinite"
+prefix="./outputs/flatdisk_tests/pulse_s2_t2"
 mkdir $prefix > /dev/null 2>&1
 
 for i in "${gridsizes[@]}"
@@ -20,4 +20,6 @@ do
 	fi
 done
 
-echo $(python ./notebooks/convergence.py -g $gridlist -p $prefix -f /output_)
+echo $prefix
+echo $(python ./notebooks/convergence_simple.py -g $gridlist -p $prefix -f /output_)
+echo $(python ./notebooks/convergence_simple_integrate.py -g $gridlist -p $prefix -f /output_)
