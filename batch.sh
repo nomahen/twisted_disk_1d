@@ -2,7 +2,7 @@
 
 gridsizes=(16 32 64 128 256 512 1024)
 gridlist=""
-prefix="./outputs/flatdisk_tests/pulse_s2_t2"
+prefix="./outputs/flatdisk_tests/dc_s2_t2"
 mkdir $prefix > /dev/null 2>&1
 
 for i in "${gridsizes[@]}"

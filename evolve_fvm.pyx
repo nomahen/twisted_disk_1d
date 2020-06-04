@@ -201,10 +201,10 @@ def evolve(*p):
     #############
 
     # Initialize Cython stuff for iteration
-    cdef double[:] L  = np.zeros(ngrid+2*ngc)
     cdef double[:] Lx   = np.zeros(ngrid+2*ngc)
     cdef double[:] Ly   = np.zeros(ngrid+2*ngc)
     cdef double[:] Lz   = _Lz 
+    cdef double[:] L  = np.copy(_Lz)
 
     # Cell interfaces 
     cdef double[:] Lx_L      = np.zeros(ngrid+2*ngc)
@@ -286,10 +286,16 @@ def evolve(*p):
         ## evolve (get fluxes)
         for i in range(ngrid+1):
             # advective Q1 term
-            F_z[i] = (-1.0) * Q1[i] * 0.5*(Lz_L[i+2]+Lz_R[i+1])
+            F_z[i] = (-1.0) * Q1[i]
 
             # diffusive Q1 term
-            F_z[i] += 2.*Q1[i] * ( (Lz[i+2] - Lz[i+1])/dx ) * 0.5*(Lz_L[i+2]/L_L[i+2] + Lz_L[i+1]/L_L[i+2])  
+            F_z[i] += 2.*Q1[i] * ( (Lz[i+2] - Lz[i+1])/dx ) / (0.5 * (L[i+2] + L[i+1])) 
+
+            # upwind the fluxes
+            if (F_z[i] >= 0.): 
+                F_z[i] *= Lz_R[i+1]
+            else:
+                F_z[i] *= Lz_L[i+2]
 
             # Apply HoR factor to everything
             F_z[i] *= (HoR)**2.
@@ -303,6 +309,8 @@ def evolve(*p):
                     Lz[i] = Lz_old[i] - (dt/dx)*(F_z[i-1] - F_z[i-2])
             elif (time_order==1):
                 Lz[i] = Lz_old[i] - (dt/dx)*(F_z[i-1] - F_z[i-2])
+
+            L[i] = (Lx[i]**2. + Ly[i]**2. + Lz[i]**2.)
                 
 
 
