@@ -310,7 +310,7 @@ def evolve(*p):
             elif (time_order==1):
                 Lz[i] = Lz_old[i] - (dt/dx)*(F_z[i+1] - F_z[i])
 
-            L[i] = (Lx[i]**2. + Ly[i]**2. + Lz[i]**2.)
+            L[i] = (Lx[i]**2. + Ly[i]**2. + Lz[i]**2.)**0.5
                 
 
 
