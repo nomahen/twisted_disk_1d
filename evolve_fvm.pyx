@@ -216,8 +216,8 @@ def evolve(*p):
     cdef double[:] L_L       = np.zeros(ngrid+2*ngc)
     cdef double[:] L_R       = np.zeros(ngrid+2*ngc)
 
-    # Fluxes (interior cell interfaces only only)
-    cdef double[:] F_z       = np.zeros(ngrid+1)
+    # Fluxes; only interior cell faces are used. Here, F_z[i] corresponds to the *left* side. 
+    cdef double[:] F_z       = np.zeros(ngrid+2*ngc)#np.zeros(ngrid+1)
 
     # miscellaneous variables
     cdef double tmp_slope # for data reconstruction
@@ -284,31 +284,31 @@ def evolve(*p):
 
 
         ## evolve (get fluxes)
-        for i in range(ngrid+1):
+        for i in range(ngc,ngrid+ngc+1):
             # advective Q1 term
             F_z[i] = (-1.0) * Q1[i]
 
             # diffusive Q1 term
-            F_z[i] += 2.*Q1[i] * ( (Lz[i+2] - Lz[i+1])/dx ) / (0.5 * (L[i+2] + L[i+1])) 
+            F_z[i] += 2.*Q1[i] * ( (Lz[i] - Lz[i-1])/dx ) / (0.5 * (L[i] + L[i-1])) 
 
             # upwind the fluxes
             if (F_z[i] >= 0.): 
-                F_z[i] *= Lz_R[i+1]
+                F_z[i] *= Lz_R[i-1]
             else:
-                F_z[i] *= Lz_L[i+2]
+                F_z[i] *= Lz_L[i]
 
             # Apply HoR factor to everything
             F_z[i] *= (HoR)**2.
 
         ## update
-        for i in range(2,ngrid+ngc):
+        for i in range(ngc,ngrid+ngc):
             if (time_order==2):
                 if predictor:
-                    Lz[i] = Lz_old[i] - 0.5*(dt/dx)*(F_z[i-1] - F_z[i-2])
+                    Lz[i] = Lz_old[i] - 0.5*(dt/dx)*(F_z[i+1] - F_z[i])
                 else:
-                    Lz[i] = Lz_old[i] - (dt/dx)*(F_z[i-1] - F_z[i-2])
+                    Lz[i] = Lz_old[i] - (dt/dx)*(F_z[i+1] - F_z[i])
             elif (time_order==1):
-                Lz[i] = Lz_old[i] - (dt/dx)*(F_z[i-1] - F_z[i-2])
+                Lz[i] = Lz_old[i] - (dt/dx)*(F_z[i+1] - F_z[i])
 
             L[i] = (Lx[i]**2. + Ly[i]**2. + Lz[i]**2.)
                 

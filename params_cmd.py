@@ -43,7 +43,7 @@ alpha    = 0.2      # alpha viscosity [HoR < alpha < 1]
 HoR      = 1e-3     # disk scale height [HoR < alpha < 1]
 space_order = 2 # 1 or 2. For heat equation, does nothing, since central differencing is automatically 2nd order. 
 time_order  = 2 # 1 or 2. 1: Forward Euler; 2: RK2/Predictor-Corrector (Midpoint Method) (General class is RK2/Predictor-Corrector, Midpoint Method gives coefficients of RK2 class)
-which_problem = "discontinuity" # "pulse", "discontinuity", "steady"    
+which_problem = "pulse" # "pulse", "discontinuity", "steady"    
 
 #### package all params to send to evolve
 import time
