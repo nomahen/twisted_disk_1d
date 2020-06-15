@@ -13,7 +13,7 @@ rho_type = "gauss"   # Type of density distribution ["gauss" or "flat"]
 # Numerical parameters
 tmax    = 0.000001   # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
 cfl     = 0.8   # Courant-Friedrichs-Lewy number
-ngrid   = 300    # num grid points
+ngrid   = 200    # num grid points
 bc      = "periodic"  # boundary condition ["sink" or "outflow" or "mix" or "infinite"]
 
 # Output
@@ -33,7 +33,7 @@ alpha    = 0.2      # alpha viscosity [HoR < alpha < 1]
 HoR      = 1e-3     # disk scale height [HoR < alpha < 1]
 space_order = 1 # 1 or 2. For heat equation, does nothing, since central differencing is automatically 2nd order. 
 time_order  = 1 # 1 or 2. 1: Forward Euler; 2: RK2/Predictor-Corrector (Midpoint Method) (General class is RK2/Predictor-Corrector, Midpoint Method gives coefficients of RK2 class)
-which_problem = "pulse" # "pulse", "periodic_sine", "discontinuity", "steady"    
+which_problem = "twist_smalltilt" # "pulse", "discontinuity", "steady", "steady_smalltilt", "twist_smalltilt"    
 
 #### package all params to send to evolve
 import time

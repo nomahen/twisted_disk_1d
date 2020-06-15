@@ -52,21 +52,36 @@ for pref in prefixes:
 time_index = -1
 
 ## Code to visualize data
-fig,ax = plt.subplots(1,2,figsize=(10,4))
+fig,ax = plt.subplots(2,2,figsize=(10,4))
 
 for i,f in enumerate(prefixes):
     plot_r  = data_dict[f][time_index]["r"]
     plot_Lz = data_dict[f][time_index]["Lz"]
+    plot_t  = data_dict[f][time_index]["tilt"]
+    plot_p  = data_dict[f][time_index]["prec"]
 
     time   = data_dict[f][time_index]["t"][0]
     rmin = np.min(plot_r)
     rmax = np.max(plot_r)
     print "simulaton %s at time %e" % (f,time)
 
-    ax[0].plot(plot_r,plot_Lz,label=f,ls='--')
-    ax[0].set_xlabel(r'$x$')
-    ax[0].set_ylabel(r'$\Lambda_z$')
-    ax[0].set_xlim(rmin,rmax)
+    # Lz
+    ax[0][0].plot(plot_r,plot_Lz,label=f,ls='--')
+    ax[0][0].set_xlabel(r'$x$')
+    ax[0][0].set_ylabel(r'$\Lambda_z$')
+    ax[0][0].set_xlim(rmin,rmax)
+
+    # tilt
+    ax[1][0].plot(plot_r,plot_t,label=f,ls='--')
+    ax[1][0].set_xlabel(r'$x$')
+    ax[1][0].set_ylabel(r'$T\,]{\rm deg}]$')
+    ax[1][0].set_xlim(rmin,rmax)
+    
+    # prec
+    ax[1][1].plot(plot_r,plot_p,label=f,ls='--')
+    ax[1][1].set_xlabel(r'$x$')
+    ax[1][1].set_ylabel(r'$P\,]{\rm deg}]$')
+    ax[1][1].set_xlim(rmin,rmax)
 
 def map_cell_volume(x,field,xmin,xmax):
     dx_base  = xmax - xmin
@@ -162,11 +177,11 @@ plot_x = np.log2(np.exp(plot_x))
 fit_x  = np.log2(np.exp(fit_x))
 
 # Now plot!
-ax[1].plot(plot_x,plot_y,color='peru')
-ax[1].scatter(fit_x,fit_y,color='black',s=20,zorder=3)
-ax[1].set_xlim(fit_x[0] - 1, fit_x[-1] + 1)
-ax[1].set_xlabel(r'${\rm log}_2n_{\rm grid}$')
-ax[1].set_ylabel(r'${\rm log}_2S$')
+ax[0][1].plot(plot_x,plot_y,color='peru')
+ax[0][1].scatter(fit_x,fit_y,color='black',s=20,zorder=3)
+ax[0][1].set_xlim(fit_x[0] - 1, fit_x[-1] + 1)
+ax[0][1].set_xlabel(r'${\rm log}_2n_{\rm grid}$')
+ax[0][1].set_ylabel(r'${\rm log}_2S$')
 
 fig.suptitle(r"$L_1 = %5.4fn_{\rm grid}^{%3.2f}$" % (np.exp(b),m))
 

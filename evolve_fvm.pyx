@@ -77,6 +77,15 @@ cdef inline double minmod(double a, double b):
 @cython.boundscheck(False)
 @cython.wraparound(False)
 @cython.cdivision(True)
+cdef inline double mc(double a, double b):
+    if (a*b > 0.):
+        return fmin(fmin(fabs(a),fabs(b)), 0.25*fabs(a+b)) 
+    else:
+        return 0.
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+@cython.cdivision(True)
 cdef inline double interp_1d(double[:] x, double[:] y, double new_x, int nx):
     cdef int i
     cdef int ind=nx-1
@@ -148,6 +157,8 @@ def evolve(*p):
     _dx  = (xmax-xmin)/ngrid
     _x   = np.linspace(xmin-1.5*_dx,xmax+1.5*_dx,ngrid+2*ngc) 
 
+    _Lx = np.zeros(ngrid+2*ngc)
+    _Ly = np.zeros(ngrid+2*ngc)
     _Lz = np.zeros(ngrid+2*ngc)
     if (which_problem=="pulse"):
         # width 0.2, centered at 1.5
@@ -164,6 +175,39 @@ def evolve(*p):
         tmax = 1.0 # evolve to full viscous time
         _Lz = (1.0/(0.2*np.sqrt(2.0*np.pi))) * (np.exp(-0.5*((_x - 2.5)**2./0.2)) + 1.0)
         bc = "infinite"  
+    if (which_problem=="steady_smalltilt"):
+        # width 0.2, centered at 1.5
+        tmax = 0.1 # evolve to 10% full viscous time
+        tilt = 1.0 * np.pi/180. # 1 degree tilt angle 
+        _Lz = (1.0/(0.2*np.sqrt(2.0*np.pi))) * (np.exp(-0.5*((_x - 2.5)**2./0.2)) + 1.0)
+        # tilt that disk
+        _L  = np.copy(_Lz)
+        _Lz = np.cos(tilt) * _L
+        _Lx = np.sin(tilt) * _L
+        bc = "infinite"  
+    if (which_problem=="twist_smalltilt"):
+        # width 0.2, centered at 1.5
+        tmax = 0.1 # for outflow BCs, want to lower tmax, otherwise Lz just leaves domain by tmax 
+        tilt_profile = ((_x-_x[0])/(_x[ngrid+2*ngc-1]-_x[0])) * np.pi/180. # 1 degree tilt angle with linear twist 
+        _Lz = (1.0/(0.2*np.sqrt(2.0*np.pi))) * (np.exp(-0.5*((_x - 2.5)**2./0.2)) + 1.0)
+        # tilt that disk
+        _L  = np.copy(_Lz)
+        _Lz = np.cos(tilt_profile) * _L
+        _Lx = np.sin(tilt_profile) * _L
+        bc = "outflow"  
+    if (which_problem=="flat_smalltilt"):
+        # width 0.2, centered at 1.5
+        tmax = 0.1 # for outflow BCs, want to lower tmax, otherwise Lz just leaves domain by tmax 
+        tilt_profile = np.ones(ngrid+2*ngc) * np.pi/180. # 1 degree tilt angle with linear twist 
+        _Lz = (1.0/(0.2*np.sqrt(2.0*np.pi))) * (np.exp(-0.5*((_x - 2.5)**2./0.2)) + 1.0)
+        # tilt that disk
+        _L  = np.copy(_Lz)
+        _Lz = np.cos(tilt_profile) * _L
+        _Lx = np.sin(tilt_profile) * _L
+        bc = "outflow"  
+    # get magnitude of angular momentum
+    _L = (_Lx**2. + _Ly**2. + _Lz**2.)**(0.5)
+
  
     ## currently, the following doesnt do anything
     # make bc_type
@@ -217,14 +261,17 @@ def evolve(*p):
     ## Evolve! ##
     #############
 
+    # avoid divide by zero error
+    cdef double small = 1e-10 # just a real small number! for avoiding 1/0 errors. 
+
     # Initialize Cython stuff for iteration
-    cdef double[:] Lx   = np.zeros(ngrid+2*ngc)
-    cdef double[:] Ly   = np.zeros(ngrid+2*ngc)
+    cdef double[:] Lx   = _Lx
+    cdef double[:] Ly   = _Ly
     cdef double[:] Lz   = _Lz 
-    cdef double[:] L  = np.copy(_Lz)
-    cdef double[:] lx   = np.zeros(ngrid+2*ngc)
-    cdef double[:] ly   = np.zeros(ngrid+2*ngc)
-    cdef double[:] lz   = _Lz/np.copy(_Lz) 
+    cdef double[:] L    = _L
+    cdef double[:] lx   = _Lx/(_L+small)
+    cdef double[:] ly   = _Ly/(_L+small)
+    cdef double[:] lz   = _Lz/(_L+small)
 
     # Cell interface reconstructions
     cdef double[:] Lx_L      = np.zeros(ngrid+2*ngc)
@@ -249,10 +296,10 @@ def evolve(*p):
 
     # miscellaneous variables
     cdef double tmp_slope # for data reconstruction
-    cdef double small = 1e-10 # just a real small number! for avoiding 1/0 errors. 
+    cdef double tmp_flux  # for flux calculation
     cdef int i
-    cdef double[:] Lx_old = np.zeros(ngrid+2*ngc)#np.copy(_Lx)
-    cdef double[:] Ly_old = np.zeros(ngrid+2*ngc)#np.copy(_Ly)
+    cdef double[:] Lx_old = np.copy(_Lx)
+    cdef double[:] Ly_old = np.copy(_Ly)
     cdef double[:] Lz_old = np.copy(_Lz)
 
     # io variables
@@ -333,6 +380,7 @@ def evolve(*p):
                 tmp_slope = 0.0
             if (space_order==2):
                 tmp_slope = minmod((Lz[i]-Lz[i-1])/dx,(Lz[i+1]-Lz[i])/dx)
+
             Lz_L[i] = Lz[i] - 0.5*dx*tmp_slope
             Lz_R[i] = Lz[i] + 0.5*dx*tmp_slope
             # Get magnitude of L
@@ -340,8 +388,8 @@ def evolve(*p):
             L_R[i]  = (Lx_R[i]**2. + Ly_R[i]**2. + Lz_R[i]**2.)**0.5
 
             ## For any gradient quantities, evaluate at cell interfaces here. 
-            ## Only need to calculate for the ngrid+1 interfaces of the cell interfaces
-            if not((i==0) or (i==1) or (i==(ngrid+2*ngc-1))):
+            ## Don't calculate for i==0;
+            if not(i==0):
                 # warp parameter psi
                 psi[i] = ((lx[i]-lx[i-1])**2. + (ly[i]-ly[i-1])**2. + (lz[i]-lz[i-1])**2.)**(0.5) / dx
 
@@ -350,6 +398,29 @@ def evolve(*p):
                 Q2[i]      = 10**(interp_1d(s_arr,Q2_arr,psi[i],ng_Q))
                 Q3[i]      = 10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))
 
+        ####################
+        ## cfl condition  ##
+        ####################
+
+        # Calculate if time_order=1 or if on predictor step, calculate timestep
+        if ((time_order==1) or (predictor==1)):
+            # reinitialize dt to be very large
+            dt = 1000000000000. 
+            for i in range(1,ngrid+2*ngc):
+                vel = (-1.0)*Q1[i]
+                vel += 2. * Q1[i] * ( (L[i] - L[i-1])/dx ) / (0.5 * (L[i] + L[i-1] + small))
+
+                # for dQdx
+                #tmp_slope = minmod((Q1[i]-Q1[i-1])/dx,(Q1[i+1]-Q1[i])/dx)
+                tmp_slope = mc((Q1[i]-Q1[i-1])/dx,(Q1[i+1]-Q1[i])/dx)
+                vel += 2. * tmp_slope
+                #vel += 2.  * (Q1[i+1]-Q1[i-1])/(2.*dx)
+                vel += -2. * Q2[i] * psi[i]**2.
+                vel += -1. * Q2[i] * ( (L[i] - L[i-1])/dx ) / (0.5 * (L[i] + L[i-1] + small))
+                vel = (HoR**2.)*fabs(vel)
+                nu  = (HoR**2.)*2.0*fabs((Q1[i]**2. + Q2[i]**2.)**0.5)
+                dt  = fmin(dt,fabs(cfl*(dx/vel)/(1. + 2*nu/dx/vel)))
+
 
 
         ######################
@@ -357,19 +428,50 @@ def evolve(*p):
         ######################
 
         for i in range(ngc,ngrid+ngc+1):
-            # advective Q1 term
-            F_z[i] = (-1.0) * Q1[i]
+            # Q1
+            tmp_flux = (-1.0) * Q1[i]
+            tmp_flux += 2. * Q1[i] * ( (L[i] - L[i-1])/dx ) / (0.5 * (L[i] + L[i-1] + small)) 
+            ### for dQdx
+            ##tmp_flux += 2.  * (Q1[i+1]-Q1[i-1])/(2.*dx)
+            #tmp_slope = minmod((Q1[i]-Q1[i-1])/dx,(Q1[i+1]-Q1[i])/dx)
+            #tmp_flux += 2. * tmp_slope
+            tmp_slope = mc((Q1[i]-Q1[i-1])/dx,(Q1[i+1]-Q1[i])/dx)
+            tmp_flux += 2. * tmp_slope
 
-            # diffusive Q1 term
-            F_z[i] += 2.*Q1[i] * ( (Lz[i] - Lz[i-1])/dx ) / (0.5 * (L[i] + L[i-1])) 
+            # Q2
+            tmp_flux += -2. * Q2[i] * psi[i]**2.
+            tmp_flux += -1. * Q2[i] * ( (L[i] - L[i-1])/dx ) / (0.5 * (L[i] + L[i-1] + small)) 
 
             # upwind the fluxes
-            if (F_z[i] >= 0.): 
-                F_z[i] *= Lz_R[i-1]
+            if (tmp_flux >= 0.): 
+                F_x[i] = tmp_flux*Lx_R[i-1]
+                F_y[i] = tmp_flux*Ly_R[i-1]
+                F_z[i] = tmp_flux*Lz_R[i-1]
+
+                ## Add the Q3 terms. What's the best way to handle them? They're weird, lets just make them consistent with upwinding.
+                F_x[i] += -Q3[i] * (1./dx) *  ( Ly_R[i-1] * (lz[i] - lz[i-1]) - Lz_R[i-1] * (ly[i] - ly[i-1]) )
+                F_y[i] += -Q3[i] * (1./dx) *  ( Lz_R[i-1] * (lx[i] - lx[i-1]) - Lx_R[i-1] * (lz[i] - lz[i-1]) )
+                F_z[i] += -Q3[i] * (1./dx) *  ( Lx_R[i-1] * (ly[i] - ly[i-1]) - Ly_R[i-1] * (lx[i] - lx[i-1]) )
             else:
-                F_z[i] *= Lz_L[i]
+                F_x[i] = tmp_flux*Lx_L[i]
+                F_y[i] = tmp_flux*Ly_L[i]
+                F_z[i] = tmp_flux*Lz_L[i]
+
+                ## Add the Q3 terms. What's the best way to handle them? They're weird, lets just make them consistent with upwinding.
+                F_x[i] += -Q3[i] * (1./dx) *  ( Ly_L[i] * (lz[i] - lz[i-1]) - Lz_L[i] * (ly[i] - ly[i-1]) )
+                F_y[i] += -Q3[i] * (1./dx) *  ( Lz_L[i] * (lx[i] - lx[i-1]) - Lx_L[i] * (lz[i] - lz[i-1]) )
+                F_z[i] += -Q3[i] * (1./dx) *  ( Lx_L[i] * (ly[i] - ly[i-1]) - Ly_L[i] * (lx[i] - lx[i-1]) )
+
+            ## Add diffusive terms that dont need upwinding
+            F_x[i] += -Q2[i] * ( (Lx[i] - Lx[i-1])/dx )
+            F_y[i] += -Q2[i] * ( (Ly[i] - Ly[i-1])/dx )
+            F_z[i] += -Q2[i] * ( (Lz[i] - Lz[i-1])/dx )
+
+
 
             # Apply HoR factor to everything
+            F_x[i] *= (HoR)**2.
+            F_y[i] *= (HoR)**2.
             F_z[i] *= (HoR)**2.
 
         #####################
@@ -379,16 +481,22 @@ def evolve(*p):
         for i in range(ngc,ngrid+ngc):
             if (time_order==2):
                 if predictor:
+                    Lx[i] = Lx_old[i] - 0.5*(dt/dx)*(F_x[i+1] - F_x[i])
+                    Ly[i] = Ly_old[i] - 0.5*(dt/dx)*(F_y[i+1] - F_y[i])
                     Lz[i] = Lz_old[i] - 0.5*(dt/dx)*(F_z[i+1] - F_z[i])
                 else:
+                    Lx[i] = Lx_old[i] - (dt/dx)*(F_x[i+1] - F_x[i])
+                    Ly[i] = Ly_old[i] - (dt/dx)*(F_y[i+1] - F_y[i])
                     Lz[i] = Lz_old[i] - (dt/dx)*(F_z[i+1] - F_z[i])
             elif (time_order==1):
+                Lx[i] = Lx_old[i] - (dt/dx)*(F_x[i+1] - F_x[i])
+                Ly[i] = Ly_old[i] - (dt/dx)*(F_y[i+1] - F_y[i])
                 Lz[i] = Lz_old[i] - (dt/dx)*(F_z[i+1] - F_z[i])
 
             L[i] = (Lx[i]**2. + Ly[i]**2. + Lz[i]**2.)**0.5
-            lx[i] = Lx[i]/L[i]
-            ly[i] = Ly[i]/L[i]
-            lz[i] = Lz[i]/L[i]
+            lx[i] = Lx[i]/(L[i] + small)
+            ly[i] = Ly[i]/(L[i] + small)
+            lz[i] = Lz[i]/(L[i] + small)
                 
 
         ###############################
@@ -432,20 +540,20 @@ def evolve(*p):
         L[ngrid+2*ngc-1] = (Lx[ngrid+2*ngc-1]**2. + Ly[ngrid+2*ngc-1]**2. + Lz[ngrid+2*ngc-1]**2.)**0.5
         L[ngrid+2*ngc-2] = (Lx[ngrid+2*ngc-2]**2. + Ly[ngrid+2*ngc-2]**2. + Lz[ngrid+2*ngc-2]**2.)**0.5
         # lx
-        lx[0] = Lx[0]/L[0]
-        lx[1] = Lx[1]/L[1]
-        lx[ngrid+2*ngc-1] = Lx[ngrid+2*ngc-1]/L[ngrid+2*ngc-1]
-        lx[ngrid+2*ngc-2] = Lx[ngrid+2*ngc-2]/L[ngrid+2*ngc-2]
+        lx[0] = Lx[0]/(L[0] + small)
+        lx[1] = Lx[1]/(L[1] + small)
+        lx[ngrid+2*ngc-1] = Lx[ngrid+2*ngc-1]/(L[ngrid+2*ngc-1] + small)
+        lx[ngrid+2*ngc-2] = Lx[ngrid+2*ngc-2]/(L[ngrid+2*ngc-2] + small)
         # ly
-        ly[0] = Ly[0]/L[0]
-        ly[1] = Ly[1]/L[1]
-        ly[ngrid+2*ngc-1] = Ly[ngrid+2*ngc-1]/L[ngrid+2*ngc-1]
-        ly[ngrid+2*ngc-2] = Ly[ngrid+2*ngc-2]/L[ngrid+2*ngc-2]
+        ly[0] = Ly[0]/(L[0] + small)
+        ly[1] = Ly[1]/(L[1] + small)
+        ly[ngrid+2*ngc-1] = Ly[ngrid+2*ngc-1]/(L[ngrid+2*ngc-1] + small)
+        ly[ngrid+2*ngc-2] = Ly[ngrid+2*ngc-2]/(L[ngrid+2*ngc-2] + small)
         # lz
-        lz[0] = Lz[0]/L[0]
-        lz[1] = Lz[1]/L[1]
-        lz[ngrid+2*ngc-1] = Lz[ngrid+2*ngc-1]/L[ngrid+2*ngc-1]
-        lz[ngrid+2*ngc-2] = Lz[ngrid+2*ngc-2]/L[ngrid+2*ngc-2]
+        lz[0] = Lz[0]/(L[0] + small)
+        lz[1] = Lz[1]/(L[1] + small)
+        lz[ngrid+2*ngc-1] = Lz[ngrid+2*ngc-1]/(L[ngrid+2*ngc-1] + small)
+        lz[ngrid+2*ngc-2] = Lz[ngrid+2*ngc-2]/(L[ngrid+2*ngc-2] + small)
 
         ############################
         ## end of iteration calls ##
@@ -494,7 +602,7 @@ def evolve(*p):
         fprintf(f_out, "%e ", Lx[i])
         fprintf(f_out, "%e ", Ly[i])
         fprintf(f_out, "%e ", Lz[i])
-        fprintf(f_out, "%e ", x[i])#r[i])
+        fprintf(f_out, "%e ", x[i])
         fprintf(f_out, "%e ", Q1[i])
         fprintf(f_out, "%e ", Q2[i])
         fprintf(f_out, "%e ", Q3[i])
