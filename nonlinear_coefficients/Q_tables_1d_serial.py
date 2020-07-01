@@ -30,9 +30,9 @@ if (dim != 0):
 
 # Filenames reflect parameters chosen, and assumes you are inside the git repository; this sends the generated coefficients 
 # to the tables directory of the git repository. 
-fn1 = "../tables/Q1_%sd_a%s_p%s_g%s_np%s_ng%s" % (dim+1,a,p,g,npts,ngpts)
-fn2 = "../tables/Q2_%sd_a%s_p%s_g%s_np%s_ng%s" % (dim+1,a,p,g,npts,ngpts)
-fn3 = "../tables/Q3_%sd_a%s_p%s_g%s_np%s_ng%s" % (dim+1,a,p,g,npts,ngpts)
+fn1 = "../tables/Q1_%sd_a%s_p%s_g%s_np%s_ng%s_sm%s" % (dim+1,a,p,g,npts,ngpts,smax)
+fn2 = "../tables/Q2_%sd_a%s_p%s_g%s_np%s_ng%s_sm%s" % (dim+1,a,p,g,npts,ngpts,smax)
+fn3 = "../tables/Q3_%sd_a%s_p%s_g%s_np%s_ng%s_sm%s" % (dim+1,a,p,g,npts,ngpts,smax)
 
 s_arr = np.logspace(0,np.log10(smax+1),npts) - 1
 

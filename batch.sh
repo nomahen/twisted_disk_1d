@@ -2,7 +2,7 @@
 
 gridsizes=(16 32 64 128 256 512 1024)
 gridlist=""
-prefix="./outputs/smalltilt_tests/Q3/twist_s1_t1"
+prefix="./outputs/new_tests/bp/outflow_alt/tilt10_tv0001_s2_t2"
 mkdir $prefix > /dev/null 2>&1
 
 for i in "${gridsizes[@]}"
@@ -21,5 +21,4 @@ do
 done
 
 echo $prefix
-echo $(python ./notebooks/convergence_simple.py -g $gridlist -p $prefix -f /output_)
 echo $(python ./notebooks/convergence_simple_integrate.py -g $gridlist -p $prefix -f /output_)

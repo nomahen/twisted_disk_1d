@@ -46,6 +46,7 @@ for pref in prefixes:
     for i,fn in enumerate(filenames):
         print "Loading file %d..." % i
         tmp_data.append(build_table(fn,HoR))
+        tmp_data[i]["r"] = np.log(tmp_data[i]["r"])
     data_dict[pref] = tmp_data
     
 # get final snapshot

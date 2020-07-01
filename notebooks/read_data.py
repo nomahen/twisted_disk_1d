@@ -11,12 +11,15 @@ def build_table(filename,HoR):
     Lx = data_array[:,0]
     Ly = data_array[:,1]
     Lz = data_array[:,2]
-    r  = data_array[:,3]
+    x  = data_array[:,3]
     Q1 = data_array[:,4]
     Q2 = data_array[:,5]
     Q3 = data_array[:,6]
     t  = data_array[:,7]
 
+    ## get physical radius)
+    r = np.exp(x)
+    
     ## Get more quantities
     L = np.sqrt(Lx*Lx + Ly*Ly + Lz*Lz)
     lx = Lx/L
@@ -39,6 +42,10 @@ def build_table(filename,HoR):
     table_list   = [Lx,Ly,Lz,r,t,L,lx,ly,lz,tilt,prec,sigma]
     table_titles = ["Lx","Ly","Lz","r","t","L","lx","ly","lz","tilt","prec","sigma"]
     return QTable(data=table_list,names=table_titles)
+
+def integrate_mass(table):
+   dr = np.abs(np.gradient(table["r"]))
+   return np.sum(table["sigma"][2:-2] * 2. * np.pi * table["r"][2:-2] * dr[2:-2])
 
 def build_data(prefix,ngrid,tgrid,data_ngrid,order=3,convert=True,HoR=1e-3):
     '''
