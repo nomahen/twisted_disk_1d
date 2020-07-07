@@ -10,7 +10,7 @@ cimport numpy as np
 cimport cython
 from libc.stdio cimport printf,fopen,fclose,fprintf,FILE,sprintf
 from libc.stdlib cimport malloc
-from libc.math cimport fmin, fmax, fabs, isnan, sin, cos
+from libc.math cimport fmin, fmax, fabs, isnan, sin, cos, log10
 from libc.string cimport memcpy
 
 # If I want to time things
@@ -239,12 +239,12 @@ def evolve(*p):
     Q3_parsed = load_Q(Q3_path)
     cdef int ng_Q = len(Q1_parsed) # Get length of Q
     ## Psi array that Q1/Q2/Q3 correspond to
-    _s_arr = np.logspace(0,np.log10(smax+1),ng_Q) - 1
+    _s_arr = np.logspace(0,np.log10(smax+1),ng_Q)# - 1
     ## Now make cython arrays for each Q coefficient and the corresponding psi array so we can interpolate from it in the code. 
     cdef double[:] Q1_arr = np.log10(-Q1_parsed + small)
     cdef double[:] Q2_arr = np.log10(Q2_parsed + small)
     cdef double[:] Q3_arr = np.log10(Q3_parsed + small)
-    cdef double[:] s_arr = _s_arr
+    cdef double[:] s_arr = np.log10(_s_arr)
     ########
 
   
@@ -426,9 +426,11 @@ def evolve(*p):
                 #    Q2[i] = 0.0#Q2_arr[ng_Q-1]
                 #    Q3[i] = 0.0#Q3_arr[ng_Q-1]
                 #else:
-                Q1[i]      = (-1.0*10**(interp_1d(s_arr,Q1_arr,psi[i],ng_Q)))
-                Q2[i]      = 10**(interp_1d(s_arr,Q2_arr,psi[i],ng_Q))
-                Q3[i]      = 10**(interp_1d(s_arr,Q3_arr,psi[i],ng_Q))
+
+                # add 1 before logging; psi is defined from (0,inf), so log10(psi+1) is the x axis of the interpolation because log10(0) is undefined
+                Q1[i]      = (-1.0*10**(interp_1d(s_arr,Q1_arr,log10(psi[i]+1),ng_Q)))
+                Q2[i]      = 10**(interp_1d(s_arr,Q2_arr,log10(psi[i]+1),ng_Q))
+                Q3[i]      = 10**(interp_1d(s_arr,Q3_arr,log10(psi[i]+1),ng_Q))
 
         ####################
         ## cfl condition  ##
