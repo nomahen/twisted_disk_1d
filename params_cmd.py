@@ -19,7 +19,7 @@ rw       = 100.      # Gaussian width of density distribution [r_g; rw > 0]
 # Numerical parameters
 tmax    = 1e-3   # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
 cfl     = 0.8   # Courant-Friedrichs-Lewy number
-soft    = 1e-2  # softening parameter for warp amplitude
+soft    = 0.0  # softening parameter for warp amplitude
 bc      = "outflow_alt"  # boundary condition ["sink" or "outflow" or "mix" or "infinite"]
 
 # Output
@@ -29,12 +29,12 @@ io_freq   = 1e-2             # Frequency
 Q_dim = "1d" # Dimension of Q tables ["1d" or "2d"]
 smax   = 88.90674269071218 # Max psi value from Q table. Min is always 0. 
 rmax_Q = 100. # If Q tables are 2d, this is maximum radius to which the tables were generated. Results will be off if this doesn't equal rmax.
-#Q1_path = "./tables/Q1_1d_a0.2_p0.0_g1.0_np30_ng10000.txt" 
-#Q2_path = "./tables/Q2_1d_a0.2_p0.0_g1.0_np30_ng10000.txt"
-#Q3_path = "./tables/Q3_1d_a0.2_p0.0_g1.0_np30_ng10000.txt"
-Q1_path = "./tables_mpi/Q1_1d_a0.2_p0.0_g1.0_np120_ng1000000_sm100.0_trunc3.txt"
-Q2_path = "./tables_mpi/Q2_1d_a0.2_p0.0_g1.0_np120_ng1000000_sm100.0_trunc3.txt"
-Q3_path = "./tables_mpi/Q3_1d_a0.2_p0.0_g1.0_np120_ng1000000_sm100.0_trunc3.txt"
+Q1_path = "./tables/Q1_1d_a0.2_p0.0_g1.0_np30_ng10000.txt" 
+Q2_path = "./tables/Q2_1d_a0.2_p0.0_g1.0_np30_ng10000.txt"
+Q3_path = "./tables/Q3_1d_a0.2_p0.0_g1.0_np30_ng10000.txt"
+#Q1_path = "./tables_mpi/Q1_1d_a0.2_p0.0_g1.0_np120_ng1000000_sm100.0_trunc3.txt"
+#Q2_path = "./tables_mpi/Q2_1d_a0.2_p0.0_g1.0_np120_ng1000000_sm100.0_trunc3.txt"
+#Q3_path = "./tables_mpi/Q3_1d_a0.2_p0.0_g1.0_np120_ng1000000_sm100.0_trunc3.txt"
 
 ### for test problems
 distr_type = "nixon_king"   # Type of density distribution ["gauss_rho", "gauss_am", "flat_rho","flat_am"]

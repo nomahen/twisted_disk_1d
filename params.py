@@ -21,10 +21,10 @@ io_freq   = 1e-2             # Frequency
 io_prefix = "./outputs/t65/output_" # prefix for output files
 
 # Numerical parameters
-tmax    = 1e-2   # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
+tmax    = 1e-3   # Maximum simulation time [t_visc = r0*r0/nu1(psi=0)]
 cfl     = 0.8   # Courant-Friedrichs-Lewy number
 soft    = 0.0  # softening parameter for warp amplitude
-ngrid   = 256    # num grid points
+ngrid   = 512    # num grid points
 bc      = "outflow_alt"  # boundary condition ["sink" or "outflow" or "mix" or "infinite"]
 
 ### for test problems

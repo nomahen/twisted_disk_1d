@@ -13,6 +13,7 @@ print "my rank is: ", rank, " and the total size is: ", size, "\n\n"
 
 p = argparse.ArgumentParser()
 p.add_argument('-a',"--alpha",dest="alpha",type=float,default=0.2, help="Alpha viscosity coefficient.")
+p.add_argument('-b',"--bulk",dest="bulk",type=float,default=0.0, help="Bulk viscosity coefficient.")
 p.add_argument('-g',"--gamma",dest="gamma",type=float,default=5./3., help="Adiabatic index. Set between 1 and 5/3.")
 p.add_argument('-p',"--alpha_exp",dest="alpha_exp",type=float,default=0., help="Exponent for radially dependent alpha viscosity. alpha = a*r**p.")
 p.add_argument('-rmax',"--rmax",dest="rmax",type=float,default=100., help = "Maximum radius in units of r_g. Minimum radius is always 1.")
@@ -23,6 +24,7 @@ p.add_argument('-2d',"--dim",dest="dim",type=int,default=0, help = "Whether to p
 args = p.parse_args()
 
 a = args.alpha
+b = args.bulk
 g = args.gamma
 p = args.alpha_exp
 rmax = args.rmax
@@ -37,9 +39,9 @@ if (dim != 0):
 
 # Filenames reflect parameters chosen, and assumes you are inside the git repository; this sends the generated coefficients 
 # to the tables directory of the git repository. 
-fn1 = "../tables_mpi/Q1_%sd_a%s_p%s_g%s_np%s_ng%s_sm%s" % (dim+1,a,p,g,npts,ngpts,smax)
-fn2 = "../tables_mpi/Q2_%sd_a%s_p%s_g%s_np%s_ng%s_sm%s" % (dim+1,a,p,g,npts,ngpts,smax)
-fn3 = "../tables_mpi/Q3_%sd_a%s_p%s_g%s_np%s_ng%s_sm%s" % (dim+1,a,p,g,npts,ngpts,smax)
+fn1 = "../tables_mpi/Q1_%sd_a%s_p%s_g%s_np%s_ng%s_sm%s_b%s" % (dim+1,a,p,g,npts,ngpts,smax,b)
+fn2 = "../tables_mpi/Q2_%sd_a%s_p%s_g%s_np%s_ng%s_sm%s_b%s" % (dim+1,a,p,g,npts,ngpts,smax,b)
+fn3 = "../tables_mpi/Q3_%sd_a%s_p%s_g%s_np%s_ng%s_sm%s_b%s" % (dim+1,a,p,g,npts,ngpts,smax,b)
 
 s_arr = np.logspace(0,np.log10(smax+1),npts) - 1
 
@@ -59,7 +61,7 @@ def alpha(a,r,p):
     "Calculates radially dependent alpha viscosity"
     return a*r**p
 
-def Q(x,sol,a,r,s,p):
+def Q(x,sol,a,r,s,p,b):
     "Calculates Q coefficients given f_i(x) (i=1..6), alpha, radius array, warp parameters. See Ogilvie 1999 Equations 112 and 120."
     f1,f2,f3,f4,f5,f6 = sol[:,0],sol[:,1],sol[:,2],sol[:,3],sol[:,4],sol[:,5]
     k = kappa(r)
@@ -74,7 +76,7 @@ def Q(x,sol,a,r,s,p):
     Q3 = np.average(Q3_integrand)/(s + int(s==0.0)*1e-16)
     return Q1,Q2,Q3
 
-def f_appx(a,r,s,g,p):
+def f_appx(a,r,s,g,p,b):
     # Calculate Taylor expanded initial condition for fi(x) arrays (i=1,...6). See appendix of Ogilvie 1999.
     k = kappa(r)
     a = alpha(a,r,p)
@@ -97,7 +99,8 @@ def f_appx(a,r,s,g,p):
     f51 = Cp1*np.cos(x) + Sp1*np.sin(x)
     
     ## 2nd order
-    Zt2 = (-3j + 2*(6-k*k)*a - (1+k*k)*1j*a*a + 2*a**3.)/(((3.-g)+2j*(4./3.)*a)*((1-k*k)+2j*a-a*a))
+    ## alpha_b only comes into play here, apparently?
+    Zt2 = (-3j + 2*(6-k*k)*a - (1+k*k)*1j*a*a + 2*a**3.)/(((3.-g)+2j*(b + (4./3.)*a))*((1-k*k)+2j*a-a*a))
     Ct2 = Zt2.real
     St2 = Zt2.imag
     
@@ -118,7 +121,7 @@ def f_appx(a,r,s,g,p):
     
     
     
-def f(y,x,a,r,s,g,p):
+def f(y,x,a,r,s,g,p,b):
     # Calculates dfi/dx(x) for (i=1...6); see equations 105-109 + 117 of Ogilvie 1999
     f1,f2,f3,f4,f5,f6 = y[0],y[1],y[2],y[3],y[4],y[5]
     k = kappa(r)
@@ -127,21 +130,21 @@ def f(y,x,a,r,s,g,p):
     # Equations 105-109 Ogilvie 1999
     df1_dx = (g - 1.0)*f4*f1
     df2_dx = (g + 1.0)*f4*f2
-    df3_dx = f4*f3 + 2*f5 + (1.0 + (1.0/3.0)*a*f4)*f2*s*np.cos(x) - a*f2*f3*(1.0+s*s*np.cos(x)**2) - a*f2*s*np.sin(x)
-    df4_dx = -df3_dx*s*np.cos(x) + 2.0*f3*s*np.sin(x) + f4*(f4+f3*s*np.cos(x)) + 1.0 - (1 + (1./3.)*a*f4)*f2 - a*f2*(f4+f3*s*np.cos(x))*(1+s*s*np.cos(x)**2.0) + a*f2*s*s*np.cos(x)*np.sin(x)
+    df3_dx = f4*f3 + 2*f5 + (1.0 + (b+(1.0/3.0)*a)*f4)*f2*s*np.cos(x) - a*f2*f3*(1.0+s*s*np.cos(x)**2) - a*f2*s*np.sin(x)
+    df4_dx = -df3_dx*s*np.cos(x) + 2.0*f3*s*np.sin(x) + f4*(f4+f3*s*np.cos(x)) + 1.0 - (1 + (b+(1./3.)*a)*f4)*f2 - a*f2*(f4+f3*s*np.cos(x))*(1+s*s*np.cos(x)**2.0) + a*f2*s*s*np.cos(x)*np.sin(x)
     df5_dx = f4*f5 - 0.5*k*k*f3 - a*f2*f5*(1.0+s*s*np.cos(x)**2.0) + 0.5*(4-k*k)*a*f2*s*np.cos(x)
     df6_dx = -2.0*f4*f6
 
     return [df1_dx,df2_dx,df3_dx,df4_dx,df5_dx,df6_dx]
 
-def objective(ic,x,a,r,s,g,p):
+def objective(ic,x,a,r,s,g,p,b):
     dx = np.average(x[1:] - x[:-1])
     
     f1a,f2a,f3a,f4a,f5a,f6a = ic[:6]
-    df1_dxa,df2_dxa,df3_dxa,df4_dxa,df5_dxa,df6_dxa = f(ic,0.,a,r,s,g,p)
-    sol = odeint(f,ic[:6],x,args=(a,r,s,g,p),atol=1e-18,rtol=1e-13)
+    df1_dxa,df2_dxa,df3_dxa,df4_dxa,df5_dxa,df6_dxa = f(ic,0.,a,r,s,g,p,b)
+    sol = odeint(f,ic[:6],x,args=(a,r,s,g,p,b),atol=1e-18,rtol=1e-13)
     outer_bc = np.array([sol[:,0][-1],sol[:,1][-1],sol[:,2][-1],sol[:,3][-1],sol[:,4][-1],sol[:,5][-1]])
-    df1_dxb,df2_dxb,df3_dxb,df4_dxb,df5_dxb,df6_dxb = f(outer_bc,2.0*np.pi ,a,r,s,g,p)
+    df1_dxb,df2_dxb,df3_dxb,df4_dxb,df5_dxb,df6_dxb = f(outer_bc,2.0*np.pi,a,r,s,g,p,b)
     
     # Minimizing derivative of f forces both f and f' to be continuous. We do compare first and last elements because
     # each function is periodic. 
@@ -150,10 +153,10 @@ def objective(ic,x,a,r,s,g,p):
     return condition
 
 
-def f_soln(a,r,s,g,p,ngrid=100,method='lm',ic_guess=[],bounds=([-np.infty]*6,[np.inf]*6)):
+def f_soln(a,r,s,g,p,b,ngrid=100,method='lm',ic_guess=[],bounds=([-np.infty]*6,[np.inf]*6)):
     
     # If we haven't supplied a guess for the inital conditions, use the Taylor expanded formulae
-    if len(ic_guess) == 0: ic_guess = f_appx(a,r,s,g,p)
+    if len(ic_guess) == 0: ic_guess = f_appx(a,r,s,g,p,b)
 
     # Calculate Epicyclic Frequency (trivially 1 for Keplerian orbits)
     k = kappa(r)
@@ -163,11 +166,11 @@ def f_soln(a,r,s,g,p,ngrid=100,method='lm',ic_guess=[],bounds=([-np.infty]*6,[np
     dx = np.average(x[1:] - x[:-1])
     
     # Find correct ICs to satisfy BC condition by minimizing least squares condition.
-    ya = least_squares(objective,ic_guess,args=(x,a,r,s,g,p),bounds=bounds,method=method,xtol=1e-11,ftol=1e-11)
+    ya = least_squares(objective,ic_guess,args=(x,a,r,s,g,p,b),bounds=bounds,method=method,xtol=1e-11,ftol=1e-11)
     ic = np.copy(ya.x)
     
     # Calculate integrated equations f1,f2,f3,f4,f5,f6 as a function of x (phi)
-    sol = odeint(f,ic[:6],x,args=(a,r,s,g,p),atol=1e-11,rtol=1e-11)
+    sol = odeint(f,ic[:6],x,args=(a,r,s,g,p,b),atol=1e-11,rtol=1e-11)
     
     # Normalization condition is <f_6> = 1
     if (np.abs(np.average(sol[:,5]))==0.0):
@@ -208,14 +211,14 @@ for j in range(rank*perrank, (rank+1)*perrank):
     s = s_arr[j]
 
     # Get solution from kernel for current psi value
-    x, sol = f_soln(a,r,s,g,p,ngrid=ngpts,method='lm',ic_guess=ic_guess)
+    x, sol = f_soln(a,r,s,g,p,b,ngrid=ngpts,method='lm',ic_guess=ic_guess)
 
     # f1(0)...f6(0) form our guess for the initial conditions of the next iteration
     f10,f20,f30,f40,f50,f60 = sol[:,0][0],sol[:,1][0],sol[:,2][0],sol[:,3][0],sol[:,4][0],sol[:,5][0]
     ic_guess = [f10,f20,f30,f40,f50,f60]
 
     # Calculate Q1,Q2,Q3 for the given value of psi
-    Q1_send[j],Q2_send[j],Q3_send[j] = Q(x,sol,a,r,s,p)
+    Q1_send[j],Q2_send[j],Q3_send[j] = Q(x,sol,a,r,s,p,b)
 
 
 comm.Reduce([Q1_send,MPI.DOUBLE],[Q1_recv,MPI.DOUBLE],op=MPI.SUM,root=0)
